@@ -524,7 +524,10 @@ pub fn try_sync_out(
     println!("- Rebasing onto calculated fork point");
     try_rebase_onto(fork_point_remote, &random_branch, num_commits_to_push, &rebase_interactive_string)?;
 
-    let push_branch_name = try_get_output_branch_name(cmd, &random_branch, starting_branch_name)?;
+    let push_branch_name = match &repo_file.remote_branch {
+        Some(branch) => branch.clone(),
+        None => try_get_output_branch_name(cmd, &random_branch, starting_branch_name)?,
+    };
     println!("- git push {} {}:{}", repo_remote_url, random_branch, push_branch_name);
     try_push_out(repo_remote_url, &random_branch, &push_branch_name, starting_branch_name)?;
 
