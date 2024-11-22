@@ -1,16 +1,15 @@
 use std::convert::From;
 
-use super::split_out;
-use super::git_helpers3;
-use super::repo_file::RepoFile;
-use super::repo_file::generate_repo_file_toml;
-use super::die;
-use super::repo_file;
 use super::cli::MgtCommandSplit;
 use super::core;
-use super::verify;
+use super::die;
+use super::git_helpers3;
+use super::repo_file;
+use super::repo_file::generate_repo_file_toml;
+use super::repo_file::RepoFile;
+use super::split_out;
 use super::topbase;
-
+use super::verify;
 
 pub fn run_split_in(cmd: &mut MgtCommandSplit) {
     let repo_file_path = if cmd.repo_file.len() < 1 {
@@ -36,9 +35,7 @@ pub fn run_split_in_as(cmd: &mut MgtCommandSplit) {
         _ => cmd.repo_file[0].clone(),
     };
     let mut repo_file = RepoFile::new();
-    repo_file.include_as = Some(vec![
-        include_as_src.into(), " ".into(),
-    ]);
+    repo_file.include_as = Some(vec![include_as_src.into(), " ".into()]);
     repo_file.remote_repo = Some(repo_uri.into());
     let is_split_in_as = true;
     run_split_in_from_repo_file(cmd, repo_file, is_split_in_as);
@@ -61,11 +58,7 @@ pub fn run_split_in_from_repo_file(
         None => die!("Failed to parse a valid output branch. you may alternatively provide one with --output-branch <branch_name>"),
     };
 
-    core::make_and_checkout_orphan_branch(
-        orphan_branch_name,
-        cmd.dry_run,
-        cmd.verbose,
-    );
+    core::make_and_checkout_orphan_branch(orphan_branch_name, cmd.dry_run, cmd.verbose);
 
     let remote_branch: Option<&str> = match &repo_file.remote_branch {
         Some(branch_name) => Some(branch_name.as_str()),
@@ -84,16 +77,24 @@ pub fn run_split_in_from_repo_file(
         cmd.input_branch.as_deref(),
         remote_branch,
         cmd.num_commits,
-        cmd.dry_run
+        cmd.dry_run,
     );
 
     let log_p = if cmd.dry_run { "   # " } else { "" };
     if let Some(ref b) = cmd.output_branch {
-        println!("{}Running filter commands on temporary branch: {}", log_p, b);
+        println!(
+            "{}Running filter commands on temporary branch: {}",
+            log_p, b
+        );
     }
-    
+
     let filter_rules = generate_gitfilter_filterrules(&repo_file, cmd.verbose);
-    core::perform_gitfilter(filter_rules, orphan_branch_name.clone(), cmd.dry_run, cmd.verbose);
+    core::perform_gitfilter(
+        filter_rules,
+        orphan_branch_name.clone(),
+        cmd.dry_run,
+        cmd.verbose,
+    );
     let res = if cmd.topbase.is_some() {
         println!("{}Topbasing", log_p);
         let should_add_branch_label = false;
@@ -140,10 +141,7 @@ pub fn generate_gitfilter_filterrules(
     filter_rules
 }
 
-pub fn generate_repo_file(
-    repo_name: &str,
-    repofile: &RepoFile
-) -> Result<(), String> {
+pub fn generate_repo_file(repo_name: &str, repofile: &RepoFile) -> Result<(), String> {
     let repo_file_path_str = format!("{}.rf", repo_name);
     let repo_file_path = std::path::PathBuf::from(&repo_file_path_str);
     if repo_file_path.exists() {
@@ -158,18 +156,18 @@ pub fn generate_repo_file(
     }
 }
 
-fn validate_repo_file(
-    cmd: &mut MgtCommandSplit,
-    repo_file: &mut RepoFile,
-) {
+fn validate_repo_file(cmd: &mut MgtCommandSplit, repo_file: &mut RepoFile) {
     let input_branch = match cmd.input_branch {
         None => None,
         Some(ref branch_name) => {
-            if ! git_helpers3::branch_exists(&branch_name) {
-                die!("You specified an input branch of {}, but that branch was not found", branch_name);
+            if !git_helpers3::branch_exists(&branch_name) {
+                die!(
+                    "You specified an input branch of {}, but that branch was not found",
+                    branch_name
+                );
             }
             Some(branch_name.clone())
-        },
+        }
     };
 
     let missing_output_branch = cmd.output_branch.is_none();
@@ -179,8 +177,10 @@ fn validate_repo_file(
     let missing_include_as = repo_file.include_as.is_none();
     let missing_include = repo_file.include.is_none();
 
-    if missing_remote_repo && missing_input_branch && ! missing_output_branch {
-        die!("Must provide either repo_name in your repofile, or specify a --input-branch argument");
+    if missing_remote_repo && missing_input_branch && !missing_output_branch {
+        die!(
+            "Must provide either repo_name in your repofile, or specify a --input-branch argument"
+        );
     }
 
     if missing_include && missing_include_as {
@@ -188,15 +188,14 @@ fn validate_repo_file(
     }
 
     if missing_repo_name && !missing_remote_repo && missing_output_branch {
-        let output_branch_str = core::try_get_repo_name_from_remote_repo(
-            repo_file.remote_repo.clone().unwrap()
-        );
+        let output_branch_str =
+            core::try_get_repo_name_from_remote_repo(repo_file.remote_repo.clone().unwrap());
         repo_file.repo_name = Some(output_branch_str.clone());
         cmd.output_branch = Some(output_branch_str);
-    } else if missing_output_branch && ! missing_repo_name {
+    } else if missing_output_branch && !missing_repo_name {
         // make the repo_name the output branch name
         cmd.output_branch = Some(repo_file.repo_name.clone().unwrap());
-    } else if missing_output_branch && ! missing_input_branch {
+    } else if missing_output_branch && !missing_input_branch {
         // make the output_branch the name of the input_branch -reverse
         let output_branch_str = format!("{}-reverse", input_branch.clone().unwrap());
         cmd.output_branch = Some(output_branch_str);

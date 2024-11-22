@@ -5,13 +5,16 @@ use super::die;
 use super::git_helpers3;
 use super::interact;
 use super::repo_file;
-use std::{io, path::PathBuf};
-use crate::{ioerr, topbase, check::blob_path_applies_to_repo_file, split_out::generate_gitfilter_filterrules, ioerre, split_in};
-use git_helpers3::{RawBlobSummary, CommitWithBlobs, Commit};
-use topbase::SuccessfulTopbaseResult;
-use repo_file::RepoFile;
-use std::{fmt::Display, time::{Duration, SystemTime}, process::Stdio};
+use crate::{
+    check::blob_path_applies_to_repo_file, ioerr, ioerre, split_in,
+    split_out::generate_gitfilter_filterrules, topbase,
+};
+use git_helpers3::{Commit, CommitWithBlobs, RawBlobSummary};
 use gitfilter::filter::FilterRule;
+use repo_file::RepoFile;
+use std::{fmt::Display, process::Stdio, time::SystemTime};
+use std::{io, path::PathBuf};
+use topbase::SuccessfulTopbaseResult;
 
 /// What kind of sync are we doing? There are 5 possible
 /// sync types I can think of:
@@ -22,11 +25,11 @@ use gitfilter::filter::FilterRule;
 /// Disjoint means neither branch has any common fork point between them, so
 /// probably cannot sync that easily?
 pub enum SyncType {
-    LocalAhead, // local is ahead of remote's most recent commit
+    LocalAhead,  // local is ahead of remote's most recent commit
     RemoteAhead, // remote is ahead of local's most recent commit
-    Diverged, // theres differences in local and remote ahead of a common fork point
-    UpToDate, // fork point is top-most commit of both
-    Disjoint, // failed to find a fork point
+    Diverged,    // theres differences in local and remote ahead of a common fork point
+    UpToDate,    // fork point is top-most commit of both
+    Disjoint,    // failed to find a fork point
 }
 
 pub fn get_all_repo_files_ex(list: &Vec<PathBuf>) -> Vec<PathBuf> {
@@ -36,7 +39,10 @@ pub fn get_all_repo_files_ex(list: &Vec<PathBuf>) -> Vec<PathBuf> {
             let all_paths_in_dir = match core::get_all_repo_files(path, true, false) {
                 Ok(p) => p,
                 Err(e) => {
-                    eprintln!("Skipping {:?} because failed to read repo files:\n{}\n", path, e);
+                    eprintln!(
+                        "Skipping {:?} because failed to read repo files:\n{}\n",
+                        path, e
+                    );
                     continue;
                 }
             };
@@ -84,7 +90,7 @@ pub fn try_checkout_back_to_starting_branch<E: Display>(
             true
         }
     };
-    let mut is_on_starting_branch = ! should_try_to_checkout_back;
+    let mut is_on_starting_branch = !should_try_to_checkout_back;
     if should_try_to_checkout_back {
         eprintln!("- Switching back to {}", starting_branch_name);
         if let Err(e) = git_helpers3::checkout_branch(starting_branch_name, false) {
@@ -126,15 +132,15 @@ pub fn result_same_get_either<T>(res: Result<T, T>) -> T {
     }
 }
 
-pub fn try_checkout_new_branch(
-    branch: &str,
-    starting_branch_name: &str
-) -> io::Result<()> {
+pub fn try_checkout_new_branch(branch: &str, starting_branch_name: &str) -> io::Result<()> {
     let make_new = true;
     let branch_made = git_helpers3::checkout_branch(&branch, make_new);
     if let Err(e) = branch_made {
         let err_msg = format!("Failed to create a temporary branch {} because:\n{}\nDoes this branch already exist maybe?", branch, e);
-        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(starting_branch_name, err_msg));
+        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(
+            starting_branch_name,
+            err_msg,
+        ));
         return ioerre!("{}", err_msg);
     }
 
@@ -144,14 +150,15 @@ pub fn try_checkout_new_branch(
 pub fn try_making_branch_from(
     branch_name: &str,
     make_from: &str,
-    starting_branch_name: &str
+    starting_branch_name: &str,
 ) -> io::Result<()> {
-    let exec_args = [
-        "git", "branch", branch_name, make_from
-    ];
+    let exec_args = ["git", "branch", branch_name, make_from];
     if let Some(err) = exechelper::executed_with_error(&exec_args) {
         let err_msg = format!("Failed to create a temporary branch {} because:\n{}Does this branch already exist maybe?", branch_name, err);
-        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(starting_branch_name, err_msg));
+        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(
+            starting_branch_name,
+            err_msg,
+        ));
         return ioerre!("{}", err_msg);
     }
 
@@ -162,21 +169,27 @@ pub fn try_making_branch_from(
     let make_new = false;
     let branch_made = git_helpers3::checkout_branch(branch_name, make_new);
     if let Err(e) = branch_made {
-        let err_msg = format!("Failed to checkout to temporary branch {} because:\n{}", branch_name, e);
-        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(starting_branch_name, err_msg));
+        let err_msg = format!(
+            "Failed to checkout to temporary branch {} because:\n{}",
+            branch_name, e
+        );
+        let err_msg = result_same_get_either(try_checkout_back_to_starting_branch(
+            starting_branch_name,
+            err_msg,
+        ));
         return ioerre!("{}", err_msg);
     }
 
     Ok(())
 }
 
-pub fn try_delete_branch<E: Display>(
-    branch: &str,
-    original_error: E,
-) -> Result<String, String> {
+pub fn try_delete_branch<E: Display>(branch: &str, original_error: E) -> Result<String, String> {
     eprintln!("- Deleting {}", branch);
     if let Err(e) = git_helpers3::delete_branch(branch) {
-        return Err(format!("{}\nALSO: Failed to delete branch {} when trying to recover because\n{}", original_error, branch, e));
+        return Err(format!(
+            "{}\nALSO: Failed to delete branch {} when trying to recover because\n{}",
+            original_error, branch, e
+        ));
     }
 
     Ok(original_error.to_string())
@@ -189,12 +202,8 @@ pub fn try_perform_gitfilter(
 ) -> io::Result<String> {
     let is_verbose = false;
     let is_dry_run = false;
-    let filtered = core::perform_gitfilter_res(
-        filter_rules,
-        branch.clone(),
-        is_dry_run,
-        is_verbose,
-    );
+    let filtered =
+        core::perform_gitfilter_res(filter_rules, branch.clone(), is_dry_run, is_verbose);
     if let Err(e) = filtered {
         // cleanup operation?
         // TODO: tricky one. probably need
@@ -203,7 +212,10 @@ pub fn try_perform_gitfilter(
         // git stage set up? in that case, wed need to
         // clear the stage index, and then go back to the
         // starting branch... could be several things wrong here.
-        let err_msg = format!("Failed to perform gitfilter on branch {} because\n{}", branch, e);
+        let err_msg = format!(
+            "Failed to perform gitfilter on branch {} because\n{}",
+            branch, e
+        );
         let err_msg = try_checkout_back_to_starting_branch(starting_branch_name, &err_msg)
             .map_err(|e| ioerr!("{}", e))?;
         // if we reached this point, we were successful in going back to our starting branch, so
@@ -221,7 +233,11 @@ pub fn try_rebase_onto(
     interactive_rebase_str: &str,
 ) -> io::Result<()> {
     let rebase_res = git_helpers3::rebase_interactively_with_commits(
-        onto_fork_point, top_name, top_num_commits, interactive_rebase_str);
+        onto_fork_point,
+        top_name,
+        top_num_commits,
+        interactive_rebase_str,
+    );
 
     if let Err(err) = rebase_res {
         // I dont think it makes sense to cleanup on a failed rebase right?
@@ -244,7 +260,11 @@ pub fn try_get_output_branch_name(
     let push_branch_name = match push_branch_name_res {
         Ok(bn) => bn,
         Err(err) => {
-            return Err(try_back_to_start_and_delete_branch(starting_branch_name, random_branch, err));
+            return Err(try_back_to_start_and_delete_branch(
+                starting_branch_name,
+                random_branch,
+                err,
+            ));
         }
     };
     let push_branch_name = push_branch_name.trim_end().trim_start();
@@ -252,7 +272,9 @@ pub fn try_get_output_branch_name(
         // if its empty, user hit enter, and then we use the default
         // which is the auto generated branch name
         &random_branch
-    } else { push_branch_name };
+    } else {
+        push_branch_name
+    };
 
     Ok(push_branch_name.to_string())
 }
@@ -277,19 +299,26 @@ pub fn try_push_out(
     starting_branch_name: &str,
 ) -> io::Result<()> {
     let push_branch_ref = format!("{}:{}", random_branch, push_branch);
-    let exec_args = [
-        "git", "push", remote_url, &push_branch_ref
-    ];
+    let exec_args = ["git", "push", remote_url, &push_branch_ref];
 
     let child_res = exechelper::spawn_with_env_ex(
-        &exec_args, &[], &[], Some(Stdio::inherit()),
-        Some(Stdio::piped()), Some(Stdio::piped()));
+        &exec_args,
+        &[],
+        &[],
+        Some(Stdio::inherit()),
+        Some(Stdio::piped()),
+        Some(Stdio::piped()),
+    );
     let child = match child_res {
         Ok(c) => c,
         Err(err) => {
             // failed to start child, but instead of just exiting here,
             // we still need to cleanup.
-            return Err(try_back_to_start_and_delete_branch(starting_branch_name, random_branch, err));
+            return Err(try_back_to_start_and_delete_branch(
+                starting_branch_name,
+                random_branch,
+                err,
+            ));
         }
     };
     let output_res = child.wait_with_output();
@@ -297,18 +326,28 @@ pub fn try_push_out(
         Ok(o) => o,
         Err(err) => {
             // failed to run command successfully to the end
-            return Err(try_back_to_start_and_delete_branch(starting_branch_name, random_branch, err));
+            return Err(try_back_to_start_and_delete_branch(
+                starting_branch_name,
+                random_branch,
+                err,
+            ));
         }
     };
 
-    let out_err = if ! output.status.success() {
+    let out_err = if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let err = format!("Failed to run git push command:\n{}", stderr);
         Some(err)
-    } else { None };
+    } else {
+        None
+    };
     if let Some(orig_err) = out_err {
         // failed to run command successfully to the end
-        return Err(try_back_to_start_and_delete_branch(starting_branch_name, random_branch, orig_err));
+        return Err(try_back_to_start_and_delete_branch(
+            starting_branch_name,
+            random_branch,
+            orig_err,
+        ));
     }
 
     // At this point we have made a successful git push
@@ -320,8 +359,9 @@ pub fn get_new_commits_after_filter(
     commits_before_filter: &Vec<CommitWithBlobs>,
 ) -> io::Result<Vec<Commit>> {
     let desired_commits = commits_before_filter.len();
-    let commits = git_helpers3::get_all_commits_from_ref(
-        filtered_branch_name, Some(desired_commits)).map_err(|e| ioerr!("{}", e))?;
+    let commits =
+        git_helpers3::get_all_commits_from_ref(filtered_branch_name, Some(desired_commits))
+            .map_err(|e| ioerr!("{}", e))?;
 
     // TODO: is just using the number of commits
     // that we set from -n <desired_commits> sufficient?
@@ -344,14 +384,16 @@ pub fn try_get_new_commits_after_filter(
         Ok(c) => Ok(c),
         Err(err) => {
             // failed, try to recover:
-            return Err(try_back_to_start_and_delete_branch(starting_branch_name, filtered_branch_name, err));
+            return Err(try_back_to_start_and_delete_branch(
+                starting_branch_name,
+                filtered_branch_name,
+                err,
+            ));
         }
     }
 }
 
-pub fn get_rebase_interactive_string_and_number(
-    commits_to_take: &Vec<Commit>
-) -> (usize, String) {
+pub fn get_rebase_interactive_string_and_number(commits_to_take: &Vec<Commit>) -> (usize, String) {
     // ok when we do git rebase -i <from>~N <from>
     // we are not guarnateed that rebase will actually
     // only take N, especially because our branches have no related history...
@@ -362,15 +404,18 @@ pub fn get_rebase_interactive_string_and_number(
     // git log now, and find the new hashes for these commits for us
     // to correctly send the interactive rebase string
     let mut num_commits_to_take = 0;
-    let mut rebase_interactive_segments: Vec<String> = commits_to_take.iter().map(|c| {
-        if c.is_merge {
-            // this skips the merge commit
-            "".to_string()
-        } else {
-            num_commits_to_take += 1;
-            format!("pick {} {}\n", c.id.long(), c.summary)
-        }
-    }).collect();
+    let mut rebase_interactive_segments: Vec<String> = commits_to_take
+        .iter()
+        .map(|c| {
+            if c.is_merge {
+                // this skips the merge commit
+                "".to_string()
+            } else {
+                num_commits_to_take += 1;
+                format!("pick {} {}\n", c.id.long(), c.summary)
+            }
+        })
+        .collect();
     rebase_interactive_segments.reverse();
     let rebase_interactive_string = rebase_interactive_segments.join("");
     (num_commits_to_take, rebase_interactive_string)
@@ -382,14 +427,18 @@ pub fn try_get_merge_choice(
     branch_name: &str,
     starting_branch_name: &str,
 ) -> io::Result<bool> {
-    let ff_merge_str = format!("Merge {} into {} by fast-forwarding", starting_branch_name, branch_name);
-    let rename_option = format!("Leave the {} branch as is, and manually merge after review", branch_name);
-    let merge_options = [
-        &ff_merge_str,
-        &rename_option,
-    ];
+    let ff_merge_str = format!(
+        "Merge {} into {} by fast-forwarding",
+        starting_branch_name, branch_name
+    );
+    let rename_option = format!(
+        "Leave the {} branch as is, and manually merge after review",
+        branch_name
+    );
+    let merge_options = [&ff_merge_str, &rename_option];
     let mut merge_choices: interact::InteractChoices = (&merge_options[..]).into();
-    let description = "Would you like to merge your original branch into the newly filtered branch?".to_string();
+    let description =
+        "Would you like to merge your original branch into the newly filtered branch?".to_string();
     merge_choices.max_loop = cmd.max_interactive_attempts;
     merge_choices.description = Some(description);
     let finalize_choice = interact::interact_number(merge_choices);
@@ -397,25 +446,29 @@ pub fn try_get_merge_choice(
         Ok(c) => c,
         Err(err) => {
             // failed, try to recover:
-            return Err(try_back_to_start_and_delete_branch(starting_branch_name, branch_name, err));
+            return Err(try_back_to_start_and_delete_branch(
+                starting_branch_name,
+                branch_name,
+                err,
+            ));
         }
     };
     Ok(finalize_choice == 1)
 }
 
-pub fn try_fast_forward_merge(
-    branch_name: &str,
-    starting_branch_name: &str
-) -> io::Result<()> {
+pub fn try_fast_forward_merge(branch_name: &str, starting_branch_name: &str) -> io::Result<()> {
     // try to ff merge into the temp branch
-    let exec_args = [
-        "git", "merge", "--ff-only", branch_name,
-    ];
+    let exec_args = ["git", "merge", "--ff-only", branch_name];
     if let Some(e) = exechelper::executed_with_error(&exec_args) {
         // TODO: can we recover if we failed to ff-merge?
         // this could be a conflict resolution so maybe we can ask user if
         // they want to manually review it, or abort?
-        return ioerre!("Failed to merge {} into {} because\n:{}", starting_branch_name, branch_name, e);
+        return ioerre!(
+            "Failed to merge {} into {} because\n:{}",
+            starting_branch_name,
+            branch_name,
+            e
+        );
     }
 
     Ok(())
@@ -444,17 +497,21 @@ pub fn try_sync_in(
     try_making_branch_from(&random_branch, "FETCH_HEAD", starting_branch_name)?;
 
     println!("- Filtering branch according to repo file");
-    let random_branch = try_perform_gitfilter(
-        random_branch, starting_branch_name, filter_rules)?;
+    let random_branch = try_perform_gitfilter(random_branch, starting_branch_name, filter_rules)?;
 
-    let new_commits_to_pull = try_get_new_commits_after_filter(&random_branch, &commits_to_pull, starting_branch_name)?;
+    let new_commits_to_pull =
+        try_get_new_commits_after_filter(&random_branch, &commits_to_pull, starting_branch_name)?;
     // eprintln!("New commits to pull: {:#?}", new_commits_to_pull);
-    let (num_commits_to_pull, rebase_interactive_string) = get_rebase_interactive_string_and_number(
-        &new_commits_to_pull);
+    let (num_commits_to_pull, rebase_interactive_string) =
+        get_rebase_interactive_string_and_number(&new_commits_to_pull);
 
     println!("- Rebasing onto calculated fork point");
-    try_rebase_onto(fork_point_local, &random_branch,
-        num_commits_to_pull, &rebase_interactive_string)?;
+    try_rebase_onto(
+        fork_point_local,
+        &random_branch,
+        num_commits_to_pull,
+        &rebase_interactive_string,
+    )?;
     println!("- Successfully rebased temporary branch");
 
     // TODO: what about cli arguments to not ask this:
@@ -479,7 +536,10 @@ pub fn try_sync_in(
     // we do not delete the branch because obviously the user
     // wants to review it.
     // so I guess we are done here.
-    println!("- Leaving you on {} to review and manually merge", random_branch);
+    println!(
+        "- Leaving you on {} to review and manually merge",
+        random_branch
+    );
 
     Ok(())
 }
@@ -514,30 +574,50 @@ pub fn try_sync_out(
     try_checkout_new_branch(&random_branch, starting_branch_name)?;
 
     println!("- Filtering branch according to repo file");
-    let random_branch = try_perform_gitfilter(
-        random_branch, starting_branch_name, filter_rules)?;
+    let random_branch = try_perform_gitfilter(random_branch, starting_branch_name, filter_rules)?;
 
-    let new_commits_to_push = try_get_new_commits_after_filter(&random_branch, &commits_to_push, starting_branch_name)?;
-    let (num_commits_to_push, rebase_interactive_string) = get_rebase_interactive_string_and_number(
-        &new_commits_to_push);
+    let new_commits_to_push =
+        try_get_new_commits_after_filter(&random_branch, &commits_to_push, starting_branch_name)?;
+    let (num_commits_to_push, rebase_interactive_string) =
+        get_rebase_interactive_string_and_number(&new_commits_to_push);
 
     println!("- Rebasing onto calculated fork point");
-    try_rebase_onto(fork_point_remote, &random_branch, num_commits_to_push, &rebase_interactive_string)?;
+    try_rebase_onto(
+        fork_point_remote,
+        &random_branch,
+        num_commits_to_push,
+        &rebase_interactive_string,
+    )?;
 
     let push_branch_name = match &repo_file.remote_branch {
         Some(branch) => branch.clone(),
         None => try_get_output_branch_name(cmd, &random_branch, starting_branch_name)?,
     };
-    println!("- git push {} {}:{}", repo_remote_url, random_branch, push_branch_name);
-    try_push_out(repo_remote_url, &random_branch, &push_branch_name, starting_branch_name)?;
+    println!(
+        "- git push {} {}:{}",
+        repo_remote_url, random_branch, push_branch_name
+    );
+    try_push_out(
+        repo_remote_url,
+        &random_branch,
+        &push_branch_name,
+        starting_branch_name,
+    )?;
 
-    println!("- Successfully git pushed. Changing back to original branch: {}", starting_branch_name);
+    println!(
+        "- Successfully git pushed. Changing back to original branch: {}",
+        starting_branch_name
+    );
     if let Err(e) = git_helpers3::checkout_branch(starting_branch_name, false) {
         return ioerre!("failed to checkout back to {} because:\n{}\nThis is probably a bug; please report this.", starting_branch_name, e);
     }
     println!("- Deleting temporary branch");
     if let Err(e) = git_helpers3::delete_branch(&random_branch) {
-        return ioerre!("failed to delete branch {} because:\n{}\nThis is probably a bug; please report this.", &random_branch, e);
+        return ioerre!(
+            "failed to delete branch {} because:\n{}\nThis is probably a bug; please report this.",
+            &random_branch,
+            e
+        );
     }
 
     Ok(())
@@ -553,9 +633,7 @@ pub fn try_sync_out(
 // try_sync_in would only take
 // the latest remote commits
 // and put them ON TOP OF whatever we have locally
-pub fn try_sync_in_then_out(
-
-) -> io::Result<()> {
+pub fn try_sync_in_then_out() -> io::Result<()> {
     println!("Not implemented yet, skipping...");
     Ok(())
 }
@@ -563,20 +641,18 @@ pub fn try_sync_in_then_out(
 pub fn handle_sync2(
     cmd: &MgtCommandSync,
     remote_url: &str,
-    repo_file_path: &PathBuf,
     repo_file: &RepoFile,
     sync_type: SyncType,
     topbase_success: SuccessfulTopbaseResult<CommitWithBlobs>,
     starting_branch_name: &str,
     can_push_pull: bool,
 ) -> io::Result<()> {
-    let only_summary = ! can_push_pull;
+    let only_summary = !can_push_pull;
     let (left_ahead, right_ahead) = match sync_type {
-        SyncType::LocalAhead |
-        SyncType::RemoteAhead |
-        SyncType::Diverged => {
-            (&topbase_success.top_commits, &topbase_success.top_right_commits)
-        }
+        SyncType::LocalAhead | SyncType::RemoteAhead | SyncType::Diverged => (
+            &topbase_success.top_commits,
+            &topbase_success.top_right_commits,
+        ),
         SyncType::UpToDate => {
             println!("Up to date. Nothing to do.");
             return Ok(());
@@ -588,15 +664,20 @@ pub fn handle_sync2(
     let mut choices = vec![];
     choices.push("exit");
     choices.push("skip");
-    let mut can_push = ! left_ahead.is_empty();
-    let mut can_pull = ! right_ahead.is_empty();
+    let mut can_push = !left_ahead.is_empty();
+    let mut can_pull = !right_ahead.is_empty();
     if can_push {
         let mut has_non_merge = false;
         let mut out_str = "\nYou can push:".to_string();
         for commit in left_ahead {
-            if ! commit.commit.is_merge {
+            if !commit.commit.is_merge {
                 has_non_merge = true;
-                out_str = format!("{}\n  {} {}", out_str, commit.commit.id.short(), commit.commit.summary);
+                out_str = format!(
+                    "{}\n  {} {}",
+                    out_str,
+                    commit.commit.id.short(),
+                    commit.commit.summary
+                );
             }
         }
         if has_non_merge {
@@ -612,9 +693,14 @@ pub fn handle_sync2(
         let mut has_non_merge = false;
         let mut out_str = "\nYou can pull:".to_string();
         for commit in right_ahead {
-            if ! commit.commit.is_merge {
+            if !commit.commit.is_merge {
                 has_non_merge = true;
-                out_str = format!("{}\n  {} {}", out_str, commit.commit.id.short(), commit.commit.summary);
+                out_str = format!(
+                    "{}\n  {} {}",
+                    out_str,
+                    commit.commit.id.short(),
+                    commit.commit.summary
+                );
             }
         }
         if has_non_merge {
@@ -672,14 +758,25 @@ pub fn handle_sync2(
         "pull" => {
             let local_fork = &topbase_success.fork_point.0.commit.id.hash;
             let take_commits = &topbase_success.top_right_commits;
-            try_sync_in(cmd, &repo_file, starting_branch_name,
-                local_fork, take_commits)
-        },
+            try_sync_in(
+                cmd,
+                &repo_file,
+                starting_branch_name,
+                local_fork,
+                take_commits,
+            )
+        }
         "push" => {
             let remote_fork = &topbase_success.fork_point.1.commit.id.hash;
             let take_commits = &topbase_success.top_commits;
-            try_sync_out(cmd, &repo_file, remote_url,
-                starting_branch_name, remote_fork, take_commits)
+            try_sync_out(
+                cmd,
+                &repo_file,
+                remote_url,
+                starting_branch_name,
+                remote_fork,
+                take_commits,
+            )
         }
 
         // this is pull --rebase then push:
@@ -690,7 +787,6 @@ pub fn handle_sync2(
 pub fn handle_sync(
     cmd: &MgtCommandSync,
     remote_url: &str,
-    repo_file_path: &PathBuf,
     repo_file: &RepoFile,
     sync_type: SyncType,
     topbase_opt: Option<SuccessfulTopbaseResult<CommitWithBlobs>>,
@@ -702,11 +798,16 @@ pub fn handle_sync(
             // TODO: come up with something better than just saying this
             println!("Branches are disjoint. cannot sync");
             Ok(())
-        },
-        Some(s) => handle_sync2(cmd, remote_url,
-            repo_file_path, repo_file,
-            sync_type, s,
-            starting_branch_name, can_push_pull),
+        }
+        Some(s) => handle_sync2(
+            cmd,
+            remote_url,
+            repo_file,
+            sync_type,
+            s,
+            starting_branch_name,
+            can_push_pull,
+        ),
     }
 }
 
@@ -716,32 +817,44 @@ pub fn sync_repo_file(
     cmd: &MgtCommandSync,
     can_push_pull: bool,
 ) -> io::Result<()> {
-    let repo_file = repo_file::parse_repo_file_from_toml_path_res(
-        repo_file_path)?;
+    let repo_file = repo_file::parse_repo_file_from_toml_path_res(repo_file_path)?;
     let default_branch = "HEAD".to_string();
-    let repo_url = repo_file.remote_repo.as_ref()
-        .ok_or(ioerr!("Failed to find a remote repo in the repo file: {:?}", repo_file_path))?;
+    let repo_url = repo_file.remote_repo.as_ref().ok_or(ioerr!(
+        "Failed to find a remote repo in the repo file: {:?}",
+        repo_file_path
+    ))?;
     let repo_branch = repo_file.remote_branch.as_ref().unwrap_or(&default_branch);
 
     // TODO: add a --no-interact mode which would override --ask-branches
     let repo_branch = if cmd.ask_branches {
-        let mut desired_branch_choice = interact::InteractChoices::choose_word(
-            &format!("What remote branch would you like to fetch? (hit Enter to use {})", repo_branch));
+        let mut desired_branch_choice = interact::InteractChoices::choose_word(&format!(
+            "What remote branch would you like to fetch? (hit Enter to use {})",
+            repo_branch
+        ));
         let description = format!("About to fetch {}", repo_url);
         desired_branch_choice.description = Some(description);
         desired_branch_choice.max_loop = cmd.max_interactive_attempts;
-        let desired_branch = interact::interact_word(desired_branch_choice)
-            .map_err(|e| ioerr!("Failed to get user's input for a desired remote branch\n{}", e))?;
+        let desired_branch = interact::interact_word(desired_branch_choice).map_err(|e| {
+            ioerr!(
+                "Failed to get user's input for a desired remote branch\n{}",
+                e
+            )
+        })?;
         let desired_branch = desired_branch.trim_start().trim_end();
         if desired_branch.is_empty() {
             repo_branch.to_string()
         } else {
             desired_branch.to_string()
         }
-    } else { repo_branch.to_string() };
+    } else {
+        repo_branch.to_string()
+    };
 
     let divider = "=".repeat(15);
-    println!("\n{} Fetching {}:{} {}", divider, repo_url, repo_branch, divider);
+    println!(
+        "\n{} Fetching {}:{} {}",
+        divider, repo_url, repo_branch, divider
+    );
     git_helpers3::fetch_branch(repo_url, &repo_branch).map_err(|e| ioerr!("{}", e))?;
 
     // TODO: support sync from a different branch other than the one
@@ -763,8 +876,13 @@ pub fn sync_repo_file(
         blob_path_applies_to_repo_file(&c.path_dest, &repo_file, this_is_a_remote_blob)
     };
     let topbase_ok = topbase::find_a_b_difference2::<CommitWithBlobs, _>(
-        local_branch, remote_branch, Some(traverse_at_a_time),
-        hashing_mode, should_rewind, Some(should_use_blob_cb))?;
+        local_branch,
+        remote_branch,
+        Some(traverse_at_a_time),
+        hashing_mode,
+        should_rewind,
+        Some(should_use_blob_cb),
+    )?;
     let (sync_type, topbase_ok) = match topbase_ok {
         None => (SyncType::Disjoint, None),
         Some(o) => {
@@ -800,9 +918,15 @@ pub fn sync_repo_file(
             (sync_type, Some(o))
         }
     };
-    handle_sync(cmd, repo_url, repo_file_path,
-        &repo_file, sync_type, topbase_ok,
-        starting_branch_name, can_push_pull)
+    handle_sync(
+        cmd,
+        repo_url,
+        &repo_file,
+        sync_type,
+        topbase_ok,
+        starting_branch_name,
+        can_push_pull,
+    )
 }
 
 pub fn canonicalize_all_repo_file_paths(paths: &Vec<PathBuf>) -> Vec<PathBuf> {
@@ -813,7 +937,10 @@ pub fn canonicalize_all_repo_file_paths(paths: &Vec<PathBuf>) -> Vec<PathBuf> {
                 out_paths.push(canon);
             }
             Err(e) => {
-                eprintln!("Not including {:?} because failed to canonicalize path\n{}", p, e);
+                eprintln!(
+                    "Not including {:?} because failed to canonicalize path\n{}",
+                    p, e
+                );
             }
         };
     }
@@ -835,7 +962,10 @@ pub fn ask_user_how_to_proceed() -> (bool, bool) {
     let selection = match selection {
         Ok(s) => s,
         Err(e) => {
-            die!("Failed to get a response from user because:\n{}\nExiting...", e)
+            die!(
+                "Failed to get a response from user because:\n{}\nExiting...",
+                e
+            )
         }
     };
     if selection == 3 {
@@ -888,9 +1018,8 @@ pub fn run_sync(cmd: &mut MgtCommandSync) {
         }
     }
 
-    let starting_branch_name = core::get_current_ref().unwrap_or_else(|| {
-        die!("Failed to get current branch name. Cannot continue")
-    });
+    let starting_branch_name = core::get_current_ref()
+        .unwrap_or_else(|| die!("Failed to get current branch name. Cannot continue"));
     let mut all_repo_files = get_all_repo_files_ex(&cmd.repo_files);
     println!("Found {:#?} repo files to sync", all_repo_files);
     println!("Found {} repo files to sync", all_repo_files.len());

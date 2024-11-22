@@ -1,5 +1,5 @@
 use std::process::Command;
-use std::{io::Error, process::Stdio, ffi::OsStr, path::Path};
+use std::{io::Error, process::Stdio, path::Path};
 
 pub struct CommandOutput {
     pub stdout: String,

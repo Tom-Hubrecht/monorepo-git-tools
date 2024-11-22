@@ -5,15 +5,17 @@ pub use structured_parse::*;
 pub mod unstructured_parse;
 pub use unstructured_parse::*;
 
-
-use std::io::Error;
+use num_cpus;
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
+use std::io::Write;
 use std::sync::mpsc;
 use std::thread;
-use num_cpus;
-use std::collections::BinaryHeap;
-use std::cmp::Reverse;
-use std::io::Write;
-use std::{path::{PathBuf, Path}, io, fmt::Display};
+use std::{
+    fmt::Display,
+    io,
+    path::{Path, PathBuf},
+};
 // use std::time::Instant;
 // use std::time::Duration;
 
@@ -347,58 +349,70 @@ mod tests {
     #[test]
     fn using_multiple_parsing_threads_keeps_order_the_same() {
         let mut expected_count = 1;
-        parse_git_filter_export_via_channel(
-            None, false, Some(4), NO_LOCATION, |obj| {
-                if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
-                    let mark_str = format!(":{}", commit_obj.mark);
-                    let expected_mark_str = format!(":{}", expected_count);
-                    assert_eq!(expected_mark_str, mark_str);
-                } else {
-                    panic!("Expected commit object");
-                }
-                expected_count += 1;
-                if 1 == 2 {
-                    return Err("a");
-                }
-                Ok(())
-            }).unwrap();
+        parse_git_filter_export_via_channel(None, false, Some(4), NO_LOCATION, |obj| {
+            if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
+                let mark_str = format!(":{}", commit_obj.mark);
+                let expected_mark_str = format!(":{}", expected_count);
+                assert_eq!(expected_mark_str, mark_str);
+            } else {
+                panic!("Expected commit object");
+            }
+            expected_count += 1;
+            if 1 == 2 {
+                return Err("a");
+            }
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn using_blobs_and_multiple_parsing_threads_keeps_order_the_same() {
         let mut expected_count = 1;
-        parse_git_filter_export_via_channel(
-            None, true, Some(4), NO_LOCATION, |obj| {
-                if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
-                    let mark_str = format!(":{}", commit_obj.mark);
-                    let expected_mark_str = format!(":{}", expected_count);
-                    assert_eq!(expected_mark_str, mark_str);
-                } else if let StructuredObjectType::Blob(blob_obj) = obj.object_type {
-                    let mark_str = format!(":{}", blob_obj.mark);
-                    let expected_mark_str = format!(":{}", expected_count);
-                    assert_eq!(expected_mark_str, mark_str);
-                }
-                expected_count += 1;
-                if 1 == 2 {
-                    return Err("a");
-                }
-                Ok(())
-            }).unwrap();
+        parse_git_filter_export_via_channel(None, true, Some(4), NO_LOCATION, |obj| {
+            if let StructuredObjectType::Commit(commit_obj) = obj.object_type {
+                let mark_str = format!(":{}", commit_obj.mark);
+                let expected_mark_str = format!(":{}", expected_count);
+                assert_eq!(expected_mark_str, mark_str);
+            } else if let StructuredObjectType::Blob(blob_obj) = obj.object_type {
+                let mark_str = format!(":{}", blob_obj.mark);
+                let expected_mark_str = format!(":{}", expected_count);
+                assert_eq!(expected_mark_str, mark_str);
+            }
+            expected_count += 1;
+            if 1 == 2 {
+                return Err("a");
+            }
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn test1() {
         let now = std::time::Instant::now();
-        parse_git_filter_export_via_channel(None, false, Some(1), NO_LOCATION,
-            |_| { if 1 == 1 { Ok(()) } else { Err("a") } }).unwrap();
+        parse_git_filter_export_via_channel(None, false, Some(1), NO_LOCATION, |_| {
+            if 1 == 1 {
+                Ok(())
+            } else {
+                Err("a")
+            }
+        })
+        .unwrap();
         eprintln!("total time {:?}", now.elapsed());
     }
 
     #[test]
     fn works_with_blobs() {
         let now = std::time::Instant::now();
-        parse_git_filter_export_via_channel(None, true, Some(1), NO_LOCATION,
-            |_| { if 1 == 1 { Ok(()) } else { Err("a") } }).unwrap();
+        parse_git_filter_export_via_channel(None, true, Some(1), NO_LOCATION, |_| {
+            if 1 == 1 {
+                Ok(())
+            } else {
+                Err("a")
+            }
+        })
+        .unwrap();
         eprintln!("total time {:?}", now.elapsed());
     }
 }

@@ -1,11 +1,11 @@
-use std::path::Path;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::io;
-use toml::Value;
 use super::die;
-use super::ioerre;
 use super::ioerr;
+use super::ioerre;
+use std::fs::File;
+use std::io;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
+use toml::Value;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct RepoFile {
@@ -29,9 +29,8 @@ pub fn read_file_into_lines(filename: &str) -> io::Result<Vec<String>> {
         return ioerre!("Failed to find repo_file: {}", filename);
     }
 
-    let file_contents = File::open(repo_file_path).map_err(|e| {
-        ioerr!("Failed to open file: {}, {}", filename, e)
-    })?;
+    let file_contents = File::open(repo_file_path)
+        .map_err(|e| ioerr!("Failed to open file: {}, {}", filename, e))?;
 
     let reader = BufReader::new(file_contents);
     let mut out = vec![];
@@ -64,7 +63,7 @@ pub fn parse_repo_file_from_toml_path<P: AsRef<Path>>(filename: P) -> RepoFile {
         Some(s) => match parse_repo_file_from_toml(s) {
             Ok(rf) => rf,
             Err(e) => die!("{}", e),
-        }
+        },
     }
 }
 
@@ -73,7 +72,7 @@ pub fn parse_repo_file_from_toml_path<P: AsRef<Path>>(filename: P) -> RepoFile {
 pub fn parse_repo_file_from_toml_path_res<P: AsRef<Path>>(filename: P) -> io::Result<RepoFile> {
     match filename.as_ref().to_str() {
         None => ioerre!("Failed to find repo file: {:?}", filename.as_ref()),
-        Some(s) => parse_repo_file_from_toml(s)
+        Some(s) => parse_repo_file_from_toml(s),
     }
 }
 
@@ -84,7 +83,7 @@ pub fn parse_repo_file_from_toml_lines(lines: Vec<String>) -> io::Result<RepoFil
     // [include]
     // this = that
     //
-    // 
+    //
     // exclude = [ something ]
     // then toml will parse the exclude array as if its part of the include table
     // so we split the file into sections separated by 2 'break' lines
@@ -108,8 +107,14 @@ pub fn parse_repo_file_from_toml_lines(lines: Vec<String>) -> io::Result<RepoFil
     let mut current_index = 0;
     let mut toml_segments = vec![];
     for i in segment_indices {
-        let string_vec: Vec<&String> = lines.iter().skip(current_index).take(i - current_index).collect();
-        if string_vec.len() == 0 { continue; }
+        let string_vec: Vec<&String> = lines
+            .iter()
+            .skip(current_index)
+            .take(i - current_index)
+            .collect();
+        if string_vec.len() == 0 {
+            continue;
+        }
 
         // we can calculate exactly how big the toml_segment is. its the sum
         // of all the lengths of each string in string_vec plus a few
@@ -193,16 +198,15 @@ pub fn parse_exclude_section(toml_value: &Value, repofile: &mut RepoFile) {
     }
 }
 
-
-pub fn parse_repo_file_from_toml_segments(
-    toml_segments: Vec<String>
-) -> io::Result<RepoFile> {
+pub fn parse_repo_file_from_toml_segments(toml_segments: Vec<String>) -> io::Result<RepoFile> {
     let mut repo_file = RepoFile::default();
     // now we have toml_segments where each segment can be its own toml file
     // we parse each into a toml::Value, and then apply the result into a repo file object
     for s in toml_segments {
         let tomlvalue = s.parse::<Value>();
-        if tomlvalue.is_err() { continue; } // TODO: report parse error to user
+        if tomlvalue.is_err() {
+            continue;
+        } // TODO: report parse error to user
         let tomlvalue = tomlvalue.unwrap();
 
         if let Value::Table(ref t) = tomlvalue {
@@ -221,10 +225,7 @@ pub fn parse_repo_file_from_toml_segments(
     Ok(repo_file)
 }
 
-
-pub fn generate_repo_file_section_from_list(
-    list: &Option<Vec<String>>,
-) -> Option<toml::Value> {
+pub fn generate_repo_file_section_from_list(list: &Option<Vec<String>>) -> Option<toml::Value> {
     match list {
         None => None,
         Some(ref string_vec) => {
@@ -242,19 +243,13 @@ pub fn generate_repo_file_section_from_list(
         }
     }
 }
-pub fn generate_repo_file_section_include(
-    repofile: &RepoFile
-) -> Option<toml::Value> {
+pub fn generate_repo_file_section_include(repofile: &RepoFile) -> Option<toml::Value> {
     generate_repo_file_section_from_list(&repofile.include)
 }
-pub fn generate_repo_file_section_exclude(
-    repofile: &RepoFile
-) -> Option<toml::Value> {
+pub fn generate_repo_file_section_exclude(repofile: &RepoFile) -> Option<toml::Value> {
     generate_repo_file_section_from_list(&repofile.exclude)
 }
-pub fn generate_repo_file_section_repo(
-    repofile: &RepoFile
-) -> Option<toml::Value> {
+pub fn generate_repo_file_section_repo(repofile: &RepoFile) -> Option<toml::Value> {
     let mut toml_map = toml::map::Map::new();
     let matches = [
         ("name", &repofile.repo_name),
@@ -266,7 +261,7 @@ pub fn generate_repo_file_section_repo(
             None => (),
             Some(ref s) => {
                 toml_map.insert(key.to_string(), toml::Value::String(s.clone()));
-            },
+            }
         }
     }
 
@@ -276,9 +271,7 @@ pub fn generate_repo_file_section_repo(
         None
     }
 }
-pub fn generate_repo_file_section_include_as(
-    repofile: &RepoFile
-) -> Option<toml::Value> {
+pub fn generate_repo_file_section_include_as(repofile: &RepoFile) -> Option<toml::Value> {
     let mut toml_map = toml::map::Map::new();
 
     match repofile.include_as {
@@ -293,7 +286,7 @@ pub fn generate_repo_file_section_include_as(
                 toml_map.insert(key.clone(), toml::Value::String(value.clone()));
                 i += 2;
             }
-        },
+        }
     }
 
     if toml_map.len() > 0 {
@@ -303,9 +296,7 @@ pub fn generate_repo_file_section_include_as(
     }
 }
 
-pub fn generate_repo_file_toml(
-    repofile: &RepoFile,
-) -> String {
+pub fn generate_repo_file_toml(repofile: &RepoFile) -> String {
     // the include and exclude
     // sections need to be done
     // seperately because
@@ -330,16 +321,16 @@ pub fn generate_repo_file_toml(
     if let Some(toml_value) = include_as_section {
         toml_map.insert("include_as".into(), toml_value);
     }
-    
+
     let toml_table = toml::Value::Table(toml_map);
     toml_table.to_string()
 }
 
 #[cfg(test)]
 mod test {
-    use super::RepoFile;
-    use super::parse_repo_file_from_toml_lines;
     use super::generate_repo_file_toml;
+    use super::parse_repo_file_from_toml_lines;
+    use super::RepoFile;
 
     fn parse_from_lines(toml_str: &str) -> RepoFile {
         let lines: Vec<String> = toml_str.split('\n').map(|s| s.to_string()).collect();
@@ -390,13 +381,13 @@ mod test {
         let mut expectedrepofileobj = RepoFile::new();
         expectedrepofileobj.remote_repo = Some("something".into());
         expectedrepofileobj.include_as = Some(vec![
-            "one/x/y/".into(), "two/x/y/".into(),
-            "three/a/b".into(), "four/a/b".into(),
+            "one/x/y/".into(),
+            "two/x/y/".into(),
+            "three/a/b".into(),
+            "four/a/b".into(),
         ]);
         expectedrepofileobj.exclude = Some(vec!["abc".into()]);
-        expectedrepofileobj.include = Some(vec![
-            "xyz".into(), "qqq".into(), "www".into(),
-        ]);
+        expectedrepofileobj.include = Some(vec!["xyz".into(), "qqq".into(), "www".into()]);
         let repofileobj = parse_from_lines(toml_str);
         assert_eq!(expectedrepofileobj, repofileobj);
     }
@@ -440,8 +431,10 @@ mod test {
         repofile.repo_name = Some("reponame".into());
         repofile.remote_branch = Some("mybranch".into());
         repofile.include_as = Some(vec![
-            "lib/".into(), " ".into(),
-            "something.txt".into(), "else.txt".into(),
+            "lib/".into(),
+            " ".into(),
+            "something.txt".into(),
+            "else.txt".into(),
         ]);
         let toml_str = generate_repo_file_toml(&repofile);
         assert!(toml_str.contains("include = \"hello\""));
@@ -462,8 +455,10 @@ mod test {
         repofile.repo_name = Some("reponame".into());
         repofile.remote_branch = Some("mybranch".into());
         repofile.include_as = Some(vec![
-            "lib/".into(), " ".into(),
-            "something.txt".into(), "else.txt".into(),
+            "lib/".into(),
+            " ".into(),
+            "something.txt".into(),
+            "else.txt".into(),
         ]);
         let toml_str = generate_repo_file_toml(&repofile);
 

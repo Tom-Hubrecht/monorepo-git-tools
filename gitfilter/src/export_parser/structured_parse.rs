@@ -1,19 +1,15 @@
 use super::UnparsedFastExportObject;
-use regex::Regex;
-use regex::Captures;
 use once_cell::sync::OnceCell;
+use regex::Captures;
+use regex::Regex;
 use std::{io, str::SplitWhitespace};
 
 macro_rules! regex_capture {
-    ($text:tt, $reg:tt) => {
-        {
-            static RE: OnceCell<Regex> = OnceCell::new();
-            let re = RE.get_or_init(|| {
-                Regex::new($reg).unwrap()
-            });
-            re.captures($text)
-        }
-    };
+    ($text:tt, $reg:tt) => {{
+        static RE: OnceCell<Regex> = OnceCell::new();
+        let re = RE.get_or_init(|| Regex::new($reg).unwrap());
+        re.captures($text)
+    }};
 }
 
 pub fn get_regex_authorline(text: &str) -> Option<Captures> {
@@ -43,7 +39,7 @@ pub fn get_regex_notemodifyline(text: &str) -> Option<Captures> {
 pub fn owned_string_option(orig: Option<&str>) -> Option<String> {
     match orig {
         Some(s) => Some(s.into()),
-        None => None
+        None => None,
     }
 }
 
@@ -139,8 +135,8 @@ pub enum NextWordType {
     From,
     Merge,
 }
+use crate::{ioerr, ioerre};
 use NextWordType::*;
-use crate::{ioerre, ioerr};
 
 /// here we diverge from git-fast-import spec a bit.
 /// the fast-import spec has several commands, but we only handle
@@ -186,9 +182,7 @@ impl<'a> Into<CommitPersonOwned> for &CommitPerson<'a> {
 
 impl<'a> PartialEq for CommitPerson<'a> {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name &&
-        self.email == other.email &&
-        self.timestr == other.timestr
+        self.name == other.name && self.email == other.email && self.timestr == other.timestr
     }
 }
 
@@ -263,7 +257,9 @@ impl Default for FileOpsOwned {
 impl<'a> Into<FileOpsOwned> for &FileOps<'a> {
     fn into(self) -> FileOpsOwned {
         match self {
-            FileOps::FileModify(a, b, c) => FileOpsOwned::FileModify((*a).into(), (*b).into(), (*c).into()),
+            FileOps::FileModify(a, b, c) => {
+                FileOpsOwned::FileModify((*a).into(), (*b).into(), (*c).into())
+            }
             FileOps::FileDelete(a) => FileOpsOwned::FileDelete((*a).into()),
             FileOps::FileCopy(a, b) => FileOpsOwned::FileCopy((*a).into(), (*b).into()),
             FileOps::FileRename(a, b) => FileOpsOwned::FileRename((*a).into(), (*b).into()),
@@ -327,7 +323,8 @@ pub fn parse_next_word<'a>(
     next_word_type: NextWordType,
     parse_mode: &mut BeforeDataParserMode,
 ) -> io::Result<()> {
-    let next_word = word_split.next()
+    let next_word = word_split
+        .next()
         .ok_or(ioerr!("Failed to parse: insufficient input"))?;
     match next_word_type {
         Oid | Mark => set_object_property(next_word, object, next_word_type),
@@ -336,11 +333,11 @@ pub fn parse_next_word<'a>(
             commit_obj.refname = next_word;
             object.object = ObjectType::Commit(commit_obj);
             *parse_mode = BeforeDataParserMode::Commit;
-        },
+        }
         ResetFrom => {
             object.has_reset_from = Some(next_word);
             *parse_mode = BeforeDataParserMode::Initial;
-        },
+        }
         ResetLine => {
             // might need to get rid of this check?
             // Im not sure if its possible to see multiple reset
@@ -352,16 +349,15 @@ pub fn parse_next_word<'a>(
             }
             object.has_reset = Some(next_word);
             *parse_mode = BeforeDataParserMode::Reset;
-        },
+        }
         Data => {
             object.data = next_word;
-        },
+        }
         // not relevant to the before data object
-        _ => {},
+        _ => {}
     }
     Ok(())
 }
-
 
 // this is used for parsing the next word but
 // only for the after data object
@@ -371,20 +367,21 @@ pub fn parse_next_word2<'a>(
     next_word_type: NextWordType,
     parse_mode: &mut AfterDataParserMode,
 ) -> io::Result<()> {
-    let next_word = word_split.next()
+    let next_word = word_split
+        .next()
         .ok_or(ioerr!("Failed to parse next word"))?;
     match next_word_type {
         From => {
             object.from = Some(next_word);
             *parse_mode = AfterFrom;
-        },
+        }
         Merge => {
             object.merges.push(next_word);
             *parse_mode = AfterFrom;
         }
         // the rest of the next word types are not relevant
         // to the after data object
-        _ => {},
+        _ => {}
     }
     Ok(())
 }
@@ -406,8 +403,8 @@ pub fn parse_author_or_committer_line<'a>(
     object: &mut BeforeDataObject<'a>,
     is_author: bool,
 ) -> io::Result<()> {
-    let [name, email, timestr] = get_n_captures::<3>(
-        get_regex_authorline, line).ok_or(ioerr!("Failed to parse author_or_committer line: {}", line))?;
+    let [name, email, timestr] = get_n_captures::<3>(get_regex_authorline, line)
+        .ok_or(ioerr!("Failed to parse author_or_committer line: {}", line))?;
 
     let person = CommitPerson {
         name: if name.is_empty() { None } else { Some(name) },
@@ -429,8 +426,8 @@ pub fn parse_filemodify_line<'a>(
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
 ) -> io::Result<()> {
-    let [mode, dataref, path] = get_n_captures::<3>(
-        get_regex_filemodifyline, line).ok_or(ioerr!("Failed to parse filemodify line: {}", line))?;
+    let [mode, dataref, path] = get_n_captures::<3>(get_regex_filemodifyline, line)
+        .ok_or(ioerr!("Failed to parse filemodify line: {}", line))?;
     let fileop = FileOps::FileModify(mode, dataref, path);
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
@@ -455,8 +452,8 @@ pub fn parse_filecopy_line<'a>(
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
 ) -> io::Result<()> {
-    let [src_path, dest_path] = get_n_captures::<2>(
-        get_regex_filecopyline, line).ok_or(ioerr!("Failed to parse filecopy line: {}", line))?;
+    let [src_path, dest_path] = get_n_captures::<2>(get_regex_filecopyline, line)
+        .ok_or(ioerr!("Failed to parse filecopy line: {}", line))?;
     let fileop = FileOps::FileCopy(src_path, dest_path);
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
@@ -468,8 +465,8 @@ pub fn parse_filerename_line<'a>(
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
 ) -> io::Result<()> {
-    let [src_path, dest_path] = get_n_captures::<2>(
-        get_regex_filerenameline, line).ok_or(ioerr!("Failed to parse filerename line: {}", line))?;
+    let [src_path, dest_path] = get_n_captures::<2>(get_regex_filerenameline, line)
+        .ok_or(ioerr!("Failed to parse filerename line: {}", line))?;
     let fileop = FileOps::FileRename(src_path, dest_path);
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
@@ -481,8 +478,8 @@ pub fn parse_notemodify_line<'a>(
     object: &mut AfterDataObject<'a>,
     parse_mode: &mut AfterDataParserMode,
 ) -> io::Result<()> {
-    let [dataref, commitish] = get_n_captures::<2>(
-        get_regex_notemodifyline, line).ok_or(ioerr!("Failed to parse notemodify line: {}", line))?;
+    let [dataref, commitish] = get_n_captures::<2>(get_regex_notemodifyline, line)
+        .ok_or(ioerr!("Failed to parse notemodify line: {}", line))?;
     let fileop = FileOps::NoteModify(dataref, commitish);
     object.fileops.push(fileop);
     *parse_mode = AfterMerge;
@@ -495,7 +492,8 @@ pub fn parse_before_data_line<'a>(
     object: &mut BeforeDataObject<'a>,
 ) -> io::Result<()> {
     let mut word_split = line.split_whitespace();
-    let first_word = word_split.next()
+    let first_word = word_split
+        .next()
         .ok_or(ioerr!("Failed to parse before data line: {}", line))?;
 
     match parse_mode {
@@ -541,7 +539,7 @@ pub fn parse_before_data_line<'a>(
             "original-oid" => parse_next_word(&mut word_split, object, Oid, parse_mode)?,
             "data" => parse_next_word(&mut word_split, object, Data, parse_mode)?,
             _ => return ioerre!("Unknown blob parsing?\n{}", line),
-        }
+        },
     }
 
     Ok(())
@@ -553,7 +551,8 @@ pub fn parse_after_data_line<'a>(
     object: &mut AfterDataObject<'a>,
 ) -> io::Result<()> {
     let mut word_split = line.split_whitespace();
-    let first_word = word_split.next()
+    let first_word = word_split
+        .next()
         .ok_or(ioerr!("Failed to parse after data line: {}", line))?;
 
     match parse_mode {
@@ -589,7 +588,7 @@ pub fn parse_after_data_line<'a>(
         },
 
         // if we have gotten past merge, then we only need to look at potential fileops
-        AfterMerge => match  first_word {
+        AfterMerge => match first_word {
             "M" => parse_filemodify_line(line, object, parse_mode)?,
             "D" => parse_filedelete_line(line, object, parse_mode)?,
             "C" => parse_filecopy_line(line, object, parse_mode)?,
@@ -606,27 +605,27 @@ pub fn parse_after_data_line<'a>(
     Ok(())
 }
 
-pub fn parse_before_data<'a>(
-    before_data_str: &'a String
-) -> io::Result<BeforeDataObject<'a>> {
+pub fn parse_before_data<'a>(before_data_str: &'a String) -> io::Result<BeforeDataObject<'a>> {
     let mut parser_mode = BeforeDataParserMode::Initial;
     let mut output_obj = BeforeDataObject::default();
     for line in before_data_str.lines() {
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
         parse_before_data_line(line, &mut parser_mode, &mut output_obj)?;
     }
 
     Ok(output_obj)
 }
 
-pub fn parse_after_data<'a>(
-    after_data_str: &'a String
-) -> io::Result<AfterDataObject<'a>> {
+pub fn parse_after_data<'a>(after_data_str: &'a String) -> io::Result<AfterDataObject<'a>> {
     let mut parser_mode = AfterDataParserMode::Initial;
     let mut output_obj = AfterDataObject::default();
 
     for line in after_data_str.lines() {
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
         parse_after_data_line(line, &mut parser_mode, &mut output_obj)?;
     }
 
@@ -653,13 +652,13 @@ pub fn get_merges(after_data_obj: &AfterDataObject) -> Vec<usize> {
 // so TODO is to rewrite those in order
 // to return an error to the user correctly
 pub fn parse_into_structured_object(
-    unparsed: UnparsedFastExportObject
+    unparsed: UnparsedFastExportObject,
 ) -> io::Result<StructuredExportObject> {
     // print!("{}", unparsed.before_data_str);
     // print!("{}", unparsed.after_data_str);
     let before_data_obj = parse_before_data(&unparsed.before_data_str)?;
     let after_data_obj = parse_after_data(&unparsed.after_data_str)?;
-    
+
     // println!("---------------------");
     // println!("{:?}", before_data_obj);
     // println!("{:?}", after_data_obj);
@@ -683,7 +682,7 @@ pub fn parse_into_structured_object(
                     }
                 }
             };
-    
+
             let merges = get_merges(&after_data_obj);
             let structured_commit = StructuredCommit {
                 commit_ref: commit_obj.refname.into(),
@@ -699,7 +698,7 @@ pub fn parse_into_structured_object(
         }
         ObjectType::Blob(blob_obj) => {
             let structured_blob = StructuredBlob {
-                mark: blob_obj.mark, 
+                mark: blob_obj.mark,
                 original_oid: blob_obj.oid.into(),
                 data: unparsed.data,
             };
@@ -713,7 +712,6 @@ pub fn parse_into_structured_object(
 
     Ok(output_object)
 }
-
 
 #[cfg(test)]
 mod test {
@@ -739,7 +737,9 @@ data 12"#;
         assert_eq!(before_obj.data, "12");
         let obj = if let ObjectType::Commit(c) = before_obj.object {
             c
-        } else { panic!("expected commit object") };
+        } else {
+            panic!("expected commit object")
+        };
         assert_eq!(obj.committer.name, Some("Bryan Bryan"));
         assert_eq!(obj.committer.email, "bb@email.com");
         assert_eq!(obj.author.unwrap().timestr, "1548162866 -0800");
@@ -767,7 +767,10 @@ data 12"#;
         let sample3 = "author Albrecht Dreß <albrecht.dress@com.rmk.(none)> 1117828346 +0100";
         let captures = get_regex_authorline(sample3).unwrap();
         assert_eq!(captures.get(1).unwrap().as_str(), "Albrecht Dreß");
-        assert_eq!(captures.get(2).unwrap().as_str(), "albrecht.dress@com.rmk.(none)");
+        assert_eq!(
+            captures.get(2).unwrap().as_str(),
+            "albrecht.dress@com.rmk.(none)"
+        );
         assert_eq!(captures.get(3).unwrap().as_str(), "1117828346 +0100");
     }
 

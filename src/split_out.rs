@@ -1,15 +1,13 @@
-use super::core;
-use super::repo_file::RepoFile;
-use super::repo_file;
-use super::die;
-use super::verify;
 use super::cli::MgtCommandSplit;
+use super::core;
+use super::die;
+use super::repo_file;
+use super::repo_file::RepoFile;
+use super::verify;
+use crate::ioerre;
 use std::io;
-use crate::{ioerre, ioerr};
 
-pub fn run_split_out(
-    cmd: &mut MgtCommandSplit,
-) {
+pub fn run_split_out(cmd: &mut MgtCommandSplit) {
     let repo_file_path = if cmd.repo_file.len() < 1 {
         die!("Must provide repo path argument");
     } else {
@@ -20,9 +18,7 @@ pub fn run_split_out(
     run_split_out_from_repo_file(cmd, repo_file)
 }
 
-pub fn run_split_out_as(
-    cmd: &mut MgtCommandSplit
-) {
+pub fn run_split_out_as(cmd: &mut MgtCommandSplit) {
     let include_as_src = match cmd.as_subdir {
         Some(ref s) => s,
         None => die!("Must provide an --as <subdirectory> option"),
@@ -32,32 +28,26 @@ pub fn run_split_out_as(
         None => die!("Must provide an --output-branch <branch_name> when doing split-out-as"),
     };
     let mut repo_file = RepoFile::new();
-    repo_file.include_as = Some(vec![
-        include_as_src.into(), " ".into(),
-    ]);
+    repo_file.include_as = Some(vec![include_as_src.into(), " ".into()]);
     repo_file.repo_name = Some(output_branch.into());
     run_split_out_from_repo_file(cmd, repo_file)
 }
 
-pub fn run_split_out_from_repo_file(
-    cmd: &mut MgtCommandSplit,
-    repo_file: RepoFile,
-) {
+pub fn run_split_out_from_repo_file(cmd: &mut MgtCommandSplit, repo_file: RepoFile) {
     let mut repo_file = repo_file;
     core::verify_dependencies();
     validate_repo_file(&mut repo_file, &mut cmd.output_branch);
     core::go_to_repo_root();
     core::safe_to_proceed();
     let filter_rules = generate_gitfilter_filterrules(&repo_file, cmd.verbose);
-    core::make_and_checkout_output_branch(
-        &cmd.output_branch,
-        cmd.dry_run,
-        cmd.verbose,
-    );
+    core::make_and_checkout_output_branch(&cmd.output_branch, cmd.dry_run, cmd.verbose);
 
     let log_p = if cmd.dry_run { "   # " } else { "" };
     if let Some(ref b) = cmd.output_branch {
-        println!("{}Running filter commands on temporary branch: {}", log_p, b);
+        println!(
+            "{}Running filter commands on temporary branch: {}",
+            log_p, b
+        );
     }
 
     let output_branch = match &cmd.output_branch {
@@ -97,15 +87,11 @@ pub fn run_split_out_from_repo_file(
             cmd.input_branch.as_deref(),
             remote_branch,
             cmd.num_commits,
-            cmd.dry_run
+            cmd.dry_run,
         );
         let current_ref = core::get_current_ref();
 
-        core::checkout_output_branch(
-            cmd.output_branch.clone(),
-            cmd.dry_run,
-            cmd.verbose
-        );
+        core::checkout_output_branch(cmd.output_branch.clone(), cmd.dry_run, cmd.verbose);
 
         let res = if runner_should_rebase {
             println!("{}Rebasing", log_p);
@@ -156,12 +142,11 @@ pub fn validate_repo_file_res(
     }
 
     if missing_output_branch && missing_repo_name && !missing_remote_repo {
-        let output_branch_str = core::try_get_repo_name_from_remote_repo(
-            repo_file.remote_repo.clone().unwrap()
-        );
+        let output_branch_str =
+            core::try_get_repo_name_from_remote_repo(repo_file.remote_repo.clone().unwrap());
         repo_file.repo_name = Some(output_branch_str.clone());
         *output_branch = Some(output_branch_str);
-    } else if missing_output_branch && ! missing_repo_name {
+    } else if missing_output_branch && !missing_repo_name {
         // make the repo_name the output branch name
         *output_branch = Some(repo_file.repo_name.clone().unwrap());
     }
@@ -172,11 +157,7 @@ pub fn validate_repo_file_res(
     Ok(())
 }
 
-
-pub fn validate_repo_file(
-    repo_file: &mut RepoFile,
-    output_branch: &mut Option<String>,
-) {
+pub fn validate_repo_file(repo_file: &mut RepoFile, output_branch: &mut Option<String>) {
     if let Err(e) = validate_repo_file_res(repo_file, output_branch) {
         die!("{}", e);
     }
@@ -191,9 +172,7 @@ pub fn generate_gitfilter_filterrules(
     filter_rules
 }
 
-pub fn get_remote_branch_from_args(
-    cmd: &MgtCommandSplit,
-) -> Option<&String> {
+pub fn get_remote_branch_from_args(cmd: &MgtCommandSplit) -> Option<&String> {
     if cmd.topbase.is_none() && cmd.rebase.is_none() {
         return None;
     }

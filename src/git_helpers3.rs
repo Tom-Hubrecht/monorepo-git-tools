@@ -1,10 +1,13 @@
 /// For the v3 version I rewrote the git_helpers module to interface
 /// with git via the CLI instead of libgit2
-
 use super::exec_helpers;
-use std::{io::{self, BufReader}, io::BufRead, process::Stdio};
-use crate::{ioerre, ioerr};
 pub use crate::blob_log_parser::*;
+use crate::{ioerr, ioerre};
+use std::{
+    io::BufRead,
+    io::{self, BufReader},
+    process::Stdio,
+};
 
 #[derive(Debug, Clone)]
 pub struct Oid {
@@ -30,8 +33,14 @@ pub struct Commit {
 
 impl Commit {
     pub fn new(hash: &str, summary: String, is_merge: bool) -> Commit {
-        let oid = Oid { hash: hash.to_string() };
-        Commit { id: oid, summary, is_merge }
+        let oid = Oid {
+            hash: hash.to_string(),
+        };
+        Commit {
+            id: oid,
+            summary,
+            is_merge,
+        }
     }
 }
 
@@ -47,30 +56,42 @@ pub fn iterate_blob_log<T>(
     num_commits: Option<usize>,
     callback: T,
 ) -> io::Result<()>
-    where T: FnMut(CommitWithBlobs) -> bool,
+where
+    T: FnMut(CommitWithBlobs) -> bool,
 {
     let mut exec_args = vec![
-        "git", "--no-pager", "log", "--no-color", "--raw",
-        "-m", "--no-decorate",
-        "--pretty=oneline", committish,
+        "git",
+        "--no-pager",
+        "log",
+        "--no-color",
+        "--raw",
+        "-m",
+        "--no-decorate",
+        "--pretty=oneline",
+        committish,
     ];
-    let n_str = match num_commits {
-        Some(n) => n.to_string(),
-        None => "".to_string()
-    };
-    if ! n_str.is_empty() {
+
+    let value: String;
+
+    if let Some(n) = num_commits {
         exec_args.push("-n");
-        exec_args.push(&n_str);
+        value = n.to_string();
+        exec_args.push(&value);
     }
 
     let mut child = exec_helpers::spawn_with_env_ex(
         &exec_args,
-        &[], &[],
-        Some(Stdio::null()), Some(Stdio::null()), Some(Stdio::piped()),
+        &[],
+        &[],
+        Some(Stdio::null()),
+        Some(Stdio::null()),
+        Some(Stdio::piped()),
     )?;
 
-    let stdout = child.stdout.as_mut()
-        .ok_or(ioerr!("Failed to get child stdout for reading git log of {}", committish))?;
+    let stdout = child.stdout.as_mut().ok_or(ioerr!(
+        "Failed to get child stdout for reading git log of {}",
+        committish
+    ))?;
     let mut stdout_read = BufReader::new(stdout);
 
     let output = iterate_blob_log_from_lines(&mut stdout_read, callback);
@@ -79,7 +100,7 @@ pub fn iterate_blob_log<T>(
         // if there was an error parsing the blob log lines,
         // we should kill the child just in case to prevent
         // running forever on child.wait()
-        Err(e) => (true, Err(e))
+        Err(e) => (true, Err(e)),
     };
 
     if should_kill_child {
@@ -93,8 +114,11 @@ pub fn iterate_blob_log<T>(
         if output.is_ok() {
             let child_res = child_wait_res?;
             // return an error if the child exited with error:
-            if ! child_res.success() {
-                return ioerre!("git log --raw --oneline -m {} exited unsuccessfully", committish);
+            if !child_res.success() {
+                return ioerre!(
+                    "git log --raw --oneline -m {} exited unsuccessfully",
+                    committish
+                );
             }
         }
     }
@@ -112,7 +136,8 @@ pub fn pull(
     num_commits: Option<u32>,
 ) -> Result<(), String> {
     let mut exec_args = vec![
-        "git", "pull",
+        "git",
+        "pull",
         remote_name,
         remote_branch_name.unwrap_or("HEAD"),
     ];
@@ -130,26 +155,16 @@ pub fn pull(
 }
 
 /// target is the current branch
-pub fn merge_branch(
-    source_branch: &str,
-) -> Result<(), String> {
-    let exec_args = vec![
-        "git", "merge",
-        source_branch
-    ];
+pub fn merge_branch(source_branch: &str) -> Result<(), String> {
+    let exec_args = vec!["git", "merge", source_branch];
     match exec_helpers::executed_with_error(&exec_args) {
         None => Ok(()),
         Some(e) => Err(e),
     }
 }
 
-pub fn make_orphan_branch_and_checkout(
-    orphan_branch_name: &str
-) -> Result<(), String> {
-    let exec_args = vec![
-        "git", "checkout",
-        "--orphan", orphan_branch_name,
-    ];
+pub fn make_orphan_branch_and_checkout(orphan_branch_name: &str) -> Result<(), String> {
+    let exec_args = vec!["git", "checkout", "--orphan", orphan_branch_name];
     match exec_helpers::executed_with_error(&exec_args) {
         None => Ok(()),
         Some(e) => Err(e),
@@ -173,31 +188,26 @@ pub fn remove_index_and_files() -> Result<(), String> {
 pub fn branch_exists(branch_name: &str) -> bool {
     let branch_ref = format!("refs/heads/{}", branch_name);
     let exec_args = [
-        "git", "show-ref", "--verify", "--quiet", branch_ref.as_str()
+        "git",
+        "show-ref",
+        "--verify",
+        "--quiet",
+        branch_ref.as_str(),
     ];
     // will return 0 (true) if branch exists , 1 (false) otherwise
     exec_helpers::executed_successfully(&exec_args)
 }
 
-pub fn delete_branch(
-    branch_name: &str
-) -> Result<(), String> {
-    let exec_args = [
-        "git", "branch", "-D", branch_name,
-    ];
+pub fn delete_branch(branch_name: &str) -> Result<(), String> {
+    let exec_args = ["git", "branch", "-D", branch_name];
     match exec_helpers::executed_with_error(&exec_args) {
         None => Ok(()),
         Some(e) => Err(e),
     }
 }
 
-pub fn checkout_branch(
-    branch_name: &str,
-    make_new: bool,
-) -> Result<(), String> {
-    let mut exec_args = vec![
-        "git", "checkout"
-    ];
+pub fn checkout_branch(branch_name: &str, make_new: bool) -> Result<(), String> {
+    let mut exec_args = vec!["git", "checkout"];
     if make_new {
         exec_args.push("-b");
         exec_args.push(branch_name);
@@ -212,9 +222,7 @@ pub fn checkout_branch(
 }
 
 pub fn get_current_ref() -> Result<String, String> {
-    let exec_args = [
-        "git", "rev-parse", "--abbrev-ref", "HEAD"
-    ];
+    let exec_args = ["git", "rev-parse", "--abbrev-ref", "HEAD"];
     match exec_helpers::execute(&exec_args) {
         Ok(out) => {
             if out.status == 0 {
@@ -234,32 +242,30 @@ pub fn get_all_commits_from_ref(
 ) -> Result<Vec<Commit>, String> {
     // TODO: in the future might want more info than
     // just the hash and summary
-    let mut exec_args = vec![
-        "git", "log", refname, "--format=%H [%p] %s",
-    ];
-    let mut n_str = "".to_string();
+    let mut exec_args = vec!["git", "log", refname, "--format=%H [%p] %s"];
+
+    let value: String;
+
     if let Some(n) = num_commits {
-        n_str = n.to_string();
-    }
-    if ! n_str.is_empty() {
+        value = n.to_string();
         exec_args.push("-n");
-        exec_args.push(&n_str);
+        exec_args.push(&value);
     }
+
     let mut commits = vec![];
     let out_str = match exec_helpers::execute(&exec_args) {
         Err(e) => return Err(e.to_string()),
         Ok(out) => match out.status {
             0 => out.stdout,
             _ => return Err(out.stderr),
-        }
+        },
     };
 
     for line in out_str.lines() {
         // everything before first space is
         // the commit hash. everything after is the summary
         let mut line_split = line.split(" ");
-        let hash = line_split.nth(0);
-        let hash = if let Some(h) = hash {
+        let hash = if let Some(h) = line_split.nth(0) {
             h.to_string()
         } else {
             return Err("Failed to parse hash".into());
@@ -271,23 +277,26 @@ pub fn get_all_commits_from_ref(
         // or not
         let is_merge = match line_split.next() {
             None => false,
-            Some(s) => !s.contains(']')
+            Some(s) => !s.contains(']'),
         };
         // if we did find a merge, that means we have to
         // advance our line split until we have reached
         // the end of the [parent, parent, ...] list
-        if is_merge { loop {
-            match line_split.next() {
-                None => (),
-                Some(s) => if s.contains(']') {
-                    break;
+        if is_merge {
+            loop {
+                match line_split.next() {
+                    None => (),
+                    Some(s) => {
+                        if s.contains(']') {
+                            break;
+                        }
+                    }
                 }
             }
-        }}
+        }
 
-        let summary = line_split.collect::<Vec<&str>>().join(" ");
         commits.push(Commit {
-            summary: summary,
+            summary: line_split.collect::<Vec<&str>>().join(" "),
             id: Oid { hash },
             is_merge,
         });
@@ -305,59 +314,55 @@ pub fn stash(pop: bool) -> io::Result<()> {
         Ok(o) => match o.status {
             0 => Ok(()),
             _ => Err(ioerr!("{}", o.stderr)),
-        }
+        },
         Err(e) => Err(e),
     }
 }
 
 pub fn has_modified_files() -> io::Result<bool> {
-    let args = ["git", "ls-files", "--modified"];
-    match exec_helpers::execute(&args) {
+    match exec_helpers::execute(&["git", "ls-files", "--modified"]) {
         Ok(o) => match o.status {
             0 => {
                 // if stdout is empty, then there are no
                 // modified files
-                Ok(! o.stdout.trim_end().trim_start().is_empty())
-            },
+                Ok(!o.stdout.trim_end().trim_start().is_empty())
+            }
             _ => Err(ioerr!("{}", o.stderr)),
-        }
+        },
         Err(e) => Err(e),
     }
 }
 
 pub fn has_staged_files() -> io::Result<bool> {
-    let args = ["git", "diff", "--name-only", "--cached"];
-    match exec_helpers::execute(&args) {
+    match exec_helpers::execute(&["git", "diff", "--name-only", "--cached"]) {
         Ok(o) => match o.status {
             0 => {
                 // if stdout is empty, then there are no
                 // staged files
-                Ok(! o.stdout.trim_end().trim_start().is_empty())
-            },
+                Ok(!o.stdout.trim_end().trim_start().is_empty())
+            }
             _ => Err(ioerr!("{}", o.stderr)),
-        }
+        },
         Err(e) => Err(e),
     }
 }
 
 pub fn get_number_of_commits_in_ref(refname: &str) -> Result<usize, String> {
-    let exec_args = [
-        "git", "log", refname, "--format=%H",
-    ];
-    let mut child = exec_helpers::spawn_with_env_ex(
-        &exec_args,
-        &[], &[],
-        None, None, Some(Stdio::piped()),
-    ).map_err(|e| e.to_string())?;
+    let exec_args = ["git", "log", refname, "--format=%H"];
+    let mut child =
+        exec_helpers::spawn_with_env_ex(&exec_args, &[], &[], None, None, Some(Stdio::piped()))
+            .map_err(|e| e.to_string())?;
 
-    let stdout = child.stdout.as_mut()
-        .ok_or(format!("Failed to get child stdout for reading number of commits of {}", refname))?;
+    let stdout = child.stdout.as_mut().ok_or(format!(
+        "Failed to get child stdout for reading number of commits of {}",
+        refname
+    ))?;
     let stdout_read = BufReader::new(stdout);
 
     let mut num_lines = 0;
     for line in stdout_read.lines() {
         let line = line.map_err(|e| e.to_string())?;
-        if ! line.is_empty() {
+        if !line.is_empty() {
             num_lines += 1;
         }
     }
@@ -367,10 +372,7 @@ pub fn get_number_of_commits_in_ref(refname: &str) -> Result<usize, String> {
 }
 
 pub fn get_repo_root() -> Result<String, String> {
-    let exec_args = [
-        "git", "rev-parse", "--show-toplevel",
-    ];
-    match exec_helpers::execute(&exec_args) {
+    match exec_helpers::execute(&["git", "rev-parse", "--show-toplevel"]) {
         Ok(out) => {
             if out.status == 0 {
                 // dont want trailing new line
@@ -384,13 +386,7 @@ pub fn get_repo_root() -> Result<String, String> {
 }
 
 pub fn fetch_branch(remote: &str, branch: &str) -> Result<(), String> {
-    let args = [
-        "git", "fetch",
-        remote, branch,
-        "--no-tags",
-    ];
-
-    let err_msg = match exec_helpers::execute(&args) {
+    let err_msg = match exec_helpers::execute(&["git", "fetch", remote, branch, "--no-tags"]) {
         Err(e) => Some(format!("{}", e)),
         Ok(o) => match o.status {
             0 => None,
@@ -404,9 +400,7 @@ pub fn fetch_branch(remote: &str, branch: &str) -> Result<(), String> {
 }
 
 pub fn get_all_files_in_repo() -> Result<String, String> {
-    let exec_args = [
-        "git", "ls-tree", "-r", "HEAD", "--name-only", "--full-tree"
-    ];
+    let exec_args = ["git", "ls-tree", "-r", "HEAD", "--name-only", "--full-tree"];
     match exec_helpers::execute(&exec_args) {
         Ok(out) => {
             if out.status == 0 {
@@ -415,15 +409,13 @@ pub fn get_all_files_in_repo() -> Result<String, String> {
                 Err(out.stderr)
             }
         }
-        Err(e) => Err(e.to_string())
+        Err(e) => Err(e.to_string()),
     }
 }
 
 pub fn reset_stage() -> Result<String, String> {
     // git reset --hard
-    let exec_args = [
-        "git", "reset", "--hard"
-    ];
+    let exec_args = ["git", "reset", "--hard"];
     match exec_helpers::execute(&exec_args) {
         Ok(out) => {
             if out.status == 0 {
@@ -432,7 +424,7 @@ pub fn reset_stage() -> Result<String, String> {
                 Err(out.stderr)
             }
         }
-        Err(e) => Err(e.to_string())
+        Err(e) => Err(e.to_string()),
     }
 }
 
@@ -455,11 +447,7 @@ pub fn rebase_interactively_with_commits(
     interactive_text: &str,
 ) -> Result<(), String> {
     let from_n_str = format!("{}~{}", from, from_n);
-    let args = [
-        "git", "rebase", "-i",
-        "--onto", onto,
-        &from_n_str, from,
-    ];
+    let args = ["git", "rebase", "-i", "--onto", onto, &from_n_str, from];
     let rebase_data_str = format!("echo \"{}\" >", interactive_text);
     // eprintln!("{}", rebase_data_str);
     // eprintln!("{:?}", args);
@@ -470,11 +458,9 @@ pub fn rebase_interactively_with_commits(
         &[rebase_data_str.as_str()],
     ) {
         Err(e) => Some(format!("{}", e)),
-        Ok(o) => {
-            match o.status {
-                0 => None,
-                _ => Some(o.stderr.lines().next().unwrap().to_string()),
-            }
+        Ok(o) => match o.status {
+            0 => None,
+            _ => Some(o.stderr.lines().next().unwrap().to_string()),
         },
     };
     if let Some(e) = err_msg {

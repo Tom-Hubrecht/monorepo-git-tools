@@ -12,7 +12,6 @@ use super::exec_helpers;
 use super::git_helpers3;
 use super::repo_file::RepoFile;
 use super::ioerre;
-use super::ioerr;
 
 pub const VALID_REPO_FILE_EXTENSION: &str = "rf";
 

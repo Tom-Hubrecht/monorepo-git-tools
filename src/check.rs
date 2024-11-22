@@ -143,7 +143,7 @@ pub fn blob_path_applies_to_repo_file(
 
 fn get_formatted_remote_or_branch_str(branch_and_remote: &str, is_remote: bool) -> String {
     match is_remote {
-        false => branch_and_remote.clone().to_string(),
+        false => branch_and_remote.to_string(),
         true => {
             let (remote, branch) = get_branch_and_remote_from_str(branch_and_remote);
             if branch == "HEAD" {

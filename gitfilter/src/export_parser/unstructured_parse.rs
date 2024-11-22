@@ -1,6 +1,6 @@
-use std::io::{BufReader, Error, ErrorKind, BufRead, Read, self};
-use std::{path::Path, process::Stdio, fmt::Display};
 use crate::{ioerr, ioerre};
+use std::io::{self, BufRead, BufReader};
+use std::{fmt::Display, path::Path, process::Stdio};
 
 pub enum ParseState {
     BeforeData,
@@ -32,7 +32,7 @@ pub fn parse_from_stream<R: BufRead, O, E: Display>(
     let mut parse_state = ParseState::BeforeData;
     let mut expected_object = 1;
     let mut expected_progress_string = make_expected_progress_string(expected_object);
-    
+
     let mut before_data_str = String::new();
     let mut data_vec: Vec<u8> = vec![];
     let mut after_data_str = String::new();
@@ -42,13 +42,19 @@ pub fn parse_from_stream<R: BufRead, O, E: Display>(
             ParseState::BeforeData => {
                 let mut line_vec = vec![];
                 let num_read = bufreader.read_until('\n' as u8, &mut line_vec)?;
-                if num_read == 0 { break; }
+                if num_read == 0 {
+                    break;
+                }
                 line_vec.pop(); // remove trailing slash
                 let line = String::from_utf8_lossy(&line_vec[..]);
                 if line.starts_with("data ") {
                     let data_size_index = 5; // data + space is 5 chars
-                    let data_size = line.get(data_size_index..).ok_or(ioerr!("Failed to parse data line"))?;
-                    let data_size: usize = data_size.parse().map_err(|e| ioerr!("Failed to parse data line:\n{}", e))?;
+                    let data_size = line
+                        .get(data_size_index..)
+                        .ok_or(ioerr!("Failed to parse data line"))?;
+                    let data_size: usize = data_size
+                        .parse()
+                        .map_err(|e| ioerr!("Failed to parse data line:\n{}", e))?;
                     parse_state = ParseState::Data(data_size);
                 }
                 before_data_str.push_str(&line);
@@ -66,7 +72,9 @@ pub fn parse_from_stream<R: BufRead, O, E: Display>(
             ParseState::AfterData => {
                 let mut line_vec = vec![];
                 let num_read = bufreader.read_until('\n' as u8, &mut line_vec)?;
-                if num_read == 0 { break; }
+                if num_read == 0 {
+                    break;
+                }
                 line_vec.pop(); // remove trailing slash
                 let line = unsafe { String::from_utf8_unchecked(line_vec) };
                 if line.starts_with(&expected_progress_string) {
@@ -74,7 +82,9 @@ pub fn parse_from_stream<R: BufRead, O, E: Display>(
                     expected_progress_string = make_expected_progress_string(expected_object);
 
                     let unparsed_obj = UnparsedFastExportObject {
-                        before_data_str, data: data_vec, after_data_str
+                        before_data_str,
+                        data: data_vec,
+                        after_data_str,
                     };
                     if let Err(e) = cb(unparsed_obj) {
                         return ioerre!("Error from callback:\n{}", e);
@@ -91,7 +101,6 @@ pub fn parse_from_stream<R: BufRead, O, E: Display>(
             }
         }
     }
-
 
     Ok(())
 }
@@ -111,19 +120,32 @@ pub fn parse_git_filter_export_with_callback<O, E: Display, P: AsRef<Path>>(
 ) -> io::Result<()> {
     // let now = Instant::now();
     let export_branch = export_branch.unwrap_or("master".into());
-    let mut fast_export_command = vec!["git", "fast-export", "--show-original-ids",
-        "--signed-tags=strip", "--tag-of-filtered-object=drop",
-        "--fake-missing-tagger","--reference-excluded-parents",
-        "--reencode=yes", "--use-done-feature", &export_branch,
-        "--progress", "1"
+    let mut fast_export_command = vec![
+        "git",
+        "fast-export",
+        "--show-original-ids",
+        "--signed-tags=strip",
+        "--tag-of-filtered-object=drop",
+        "--fake-missing-tagger",
+        "--reference-excluded-parents",
+        "--reencode=yes",
+        "--use-done-feature",
+        &export_branch,
+        "--progress",
+        "1",
     ];
     if !with_blobs {
         fast_export_command.push("--no-data");
     }
 
     let mut child = exechelper::spawn_with_env_ex2(
-        &fast_export_command, &[], &[], repo_location,
-        Some(Stdio::null()), Some(Stdio::null()), Some(Stdio::piped()),
+        &fast_export_command,
+        &[],
+        &[],
+        repo_location,
+        Some(Stdio::null()),
+        Some(Stdio::null()),
+        Some(Stdio::piped()),
     )?;
 
     let child_stdout = match child.stdout.take() {

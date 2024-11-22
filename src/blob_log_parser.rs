@@ -1,9 +1,11 @@
-use std::{str::FromStr, io::{self, BufRead}};
-use crate::{ioerr, git_helpers3::Commit};
+use crate::{git_helpers3::Commit, ioerr};
+use std::{
+    io::{self, BufRead},
+    str::FromStr,
+};
 
 /// see: https://www.git-scm.com/docs/git-diff#_diff_format_for_merges
 /// and: https://www.git-scm.com/docs/git-diff#_raw_output_format
-
 
 /// see: https://www.git-scm.com/docs/git-diff
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Eq, Hash)]
@@ -172,21 +174,19 @@ impl From<(DiffStatus, FileMode, FileMode)> for DiffStatusAndFileMode {
         let out = left_bits1 << 13;
         let out = out | (left_bits2 << 10);
         let out = out | right_bits;
-        DiffStatusAndFileMode {
-            data: out,
-        }
+        DiffStatusAndFileMode { data: out }
     }
 }
 
 impl From<DiffStatusAndFileMode> for (DiffStatus, FileMode, FileMode) {
     fn from(orig: DiffStatusAndFileMode) -> Self {
-        let right_bits =  orig.data & 0b00000000_00000111;
+        let right_bits = orig.data & 0b00000000_00000111;
         let left_bits1 = (orig.data & 0b11100000_00000000) >> 13;
         let left_bits2 = (orig.data & 0b00011100_00000000) >> 10;
         let status = u16_to_diff_status(right_bits);
         let mode_src = u16_to_filemode(left_bits1);
         let mode_dest = u16_to_filemode(left_bits2);
-        
+
         (status, mode_src, mode_dest)
     }
 }
@@ -270,12 +270,7 @@ impl From<RawBlobSummary> for RawBlobSummaryEndStateWithoutPath {
     }
 }
 
-impl RawBlobSummary {
-    pub fn status(&self) -> DiffStatus {
-        let (status, _, _) = self.src_dest_mode_and_status.into();
-        status
-    }
-}
+impl RawBlobSummary {}
 
 pub fn hex_char_to_u64(c: char) -> u64 {
     match c {
@@ -299,27 +294,27 @@ pub fn hex_char_to_u64(c: char) -> u64 {
     }
 }
 
-pub fn u64_to_hex_char(u: u64) -> char {
-    match u {
-        0 => '0',
-        1 => '1',
-        2 => '2',
-        3 => '3',
-        4 => '4',
-        5 => '5',
-        6 => '6',
-        7 => '7',
-        8 => '8',
-        9 => '9',
-        10 => 'a',
-        11 => 'b',
-        12 => 'c',
-        13 => 'd',
-        14 => 'e',
-        15 => 'f',
-        _ => '0',
-    }
-}
+// pub fn u64_to_hex_char(u: u64) -> char {
+//     match u {
+//         0 => '0',
+//         1 => '1',
+//         2 => '2',
+//         3 => '3',
+//         4 => '4',
+//         5 => '5',
+//         6 => '6',
+//         7 => '7',
+//         8 => '8',
+//         9 => '9',
+//         10 => 'a',
+//         11 => 'b',
+//         12 => 'c',
+//         13 => 'd',
+//         14 => 'e',
+//         15 => 'f',
+//         _ => '0',
+//     }
+// }
 
 /// every hex character is 4 bits,
 /// so max we can handle without overflowing is 16 hex chars
@@ -335,27 +330,26 @@ pub fn hex_to_u64(hex: &str) -> u64 {
     out
 }
 
-pub fn u64_to_hex(u: u64) -> [char; 16] {
-    [
-        u64_to_hex_char((u & 0xf0_00_00_00_00_00_00_00) >> 60),
-        u64_to_hex_char((u & 0x0f_00_00_00_00_00_00_00) >> 56),
-        u64_to_hex_char((u & 0x00_f0_00_00_00_00_00_00) >> 52),
-        u64_to_hex_char((u & 0x00_0f_00_00_00_00_00_00) >> 48),
-        u64_to_hex_char((u & 0x00_00_f0_00_00_00_00_00) >> 44),
-        u64_to_hex_char((u & 0x00_00_0f_00_00_00_00_00) >> 40),
-        u64_to_hex_char((u & 0x00_00_00_f0_00_00_00_00) >> 36),
-        u64_to_hex_char((u & 0x00_00_00_0f_00_00_00_00) >> 32),
-        u64_to_hex_char((u & 0x00_00_00_00_f0_00_00_00) >> 28),
-        u64_to_hex_char((u & 0x00_00_00_00_0f_00_00_00) >> 24),
-        u64_to_hex_char((u & 0x00_00_00_00_00_f0_00_00) >> 20),
-        u64_to_hex_char((u & 0x00_00_00_00_00_0f_00_00) >> 16),
-        u64_to_hex_char((u & 0x00_00_00_00_00_00_f0_00) >> 12),
-        u64_to_hex_char((u & 0x00_00_00_00_00_00_0f_00) >> 8),
-        u64_to_hex_char((u & 0x00_00_00_00_00_00_00_f0) >> 4),
-        u64_to_hex_char((u & 0x00_00_00_00_00_00_00_0f) >> 0),
-    ]
-}
-
+// pub fn u64_to_hex(u: u64) -> [char; 16] {
+//     [
+//         u64_to_hex_char((u & 0xf0_00_00_00_00_00_00_00) >> 60),
+//         u64_to_hex_char((u & 0x0f_00_00_00_00_00_00_00) >> 56),
+//         u64_to_hex_char((u & 0x00_f0_00_00_00_00_00_00) >> 52),
+//         u64_to_hex_char((u & 0x00_0f_00_00_00_00_00_00) >> 48),
+//         u64_to_hex_char((u & 0x00_00_f0_00_00_00_00_00) >> 44),
+//         u64_to_hex_char((u & 0x00_00_0f_00_00_00_00_00) >> 40),
+//         u64_to_hex_char((u & 0x00_00_00_f0_00_00_00_00) >> 36),
+//         u64_to_hex_char((u & 0x00_00_00_0f_00_00_00_00) >> 32),
+//         u64_to_hex_char((u & 0x00_00_00_00_f0_00_00_00) >> 28),
+//         u64_to_hex_char((u & 0x00_00_00_00_0f_00_00_00) >> 24),
+//         u64_to_hex_char((u & 0x00_00_00_00_00_f0_00_00) >> 20),
+//         u64_to_hex_char((u & 0x00_00_00_00_00_0f_00_00) >> 16),
+//         u64_to_hex_char((u & 0x00_00_00_00_00_00_f0_00) >> 12),
+//         u64_to_hex_char((u & 0x00_00_00_00_00_00_0f_00) >> 8),
+//         u64_to_hex_char((u & 0x00_00_00_00_00_00_00_f0) >> 4),
+//         u64_to_hex_char((u & 0x00_00_00_00_00_00_00_0f) >> 0),
+//     ]
+// }
 
 #[derive(Debug, Clone)]
 pub struct CommitWithBlobs {
@@ -436,10 +430,10 @@ pub fn parse_blob_log_line(line: &str) -> Option<BlobLogLine> {
     let starts_with_colon = line.starts_with(':');
 
     // start of a commit, split it by hash and message:
-    if ! starts_with_colon {
+    if !starts_with_colon {
         return parse_blob_log_commit_line(line);
     }
-    
+
     // then this is a blob:
     let line_without_colons = &line[1..];
     // the first 5 strings we want are seperated by spaces
@@ -447,28 +441,31 @@ pub fn parse_blob_log_line(line: &str) -> Option<BlobLogLine> {
     let src_mode = split.next()?;
     let dest_mode = split.next()?;
     let src_sha = split.next()?;
-    let dest_sha= split.next()?;
+    let dest_sha = split.next()?;
     let status_str = split.next()?;
     // plus 6 because we skipped 4 spaces when calling .next() 4 times
     // and then one tab was skipped when getting the status_str
     // and also 1 colon in the beginning
     let num_chars_skipped = 4 + 1 + 1;
     let next_start_index = num_chars_skipped
-        + src_mode.len() + dest_mode.len() + src_sha.len()
-        + dest_sha.len() + status_str.len();
+        + src_mode.len()
+        + dest_mode.len()
+        + src_sha.len()
+        + dest_sha.len()
+        + status_str.len();
 
     // now we know where the rest of the string is:
     // note that the path string could contain a tab character
     // which would indicate its a [src] -> [dest] path string,
     // but we wont parse that here.
     let path_str = &line[next_start_index..];
-    return Some(BlobLogLine::Blob(src_mode, dest_mode,
-        src_sha, dest_sha, status_str, path_str));
+    return Some(BlobLogLine::Blob(
+        src_mode, dest_mode, src_sha, dest_sha, status_str, path_str,
+    ));
 }
 
 pub fn parse_blob_log_line_or_error(line: &str) -> io::Result<BlobLogLine> {
-    parse_blob_log_line(line)
-        .ok_or(ioerr!("Failed to parse blob log line: {}", line))
+    parse_blob_log_line(line).ok_or(ioerr!("Failed to parse blob log line: {}", line))
 }
 
 pub fn create_blob(
@@ -518,8 +515,7 @@ pub fn create_blob_and_insert(
     status: &str,
     path_str: &str,
 ) -> io::Result<()> {
-    let out = create_blob(src_mode, dest_mode,
-        src_sha, dest_sha, status, path_str)?;
+    let out = create_blob(src_mode, dest_mode, src_sha, dest_sha, status, path_str)?;
     blob_list.push(out);
     Ok(())
 }
@@ -528,7 +524,8 @@ pub fn iterate_blob_log_from_lines<T, L: BufRead>(
     line_reader: &mut L,
     callback: T,
 ) -> io::Result<bool>
-    where T: FnMut(CommitWithBlobs) -> bool,
+where
+    T: FnMut(CommitWithBlobs) -> bool,
 {
     let mut cb = callback;
     let mut last_commit = Commit::new("", "".into(), true);
@@ -545,14 +542,15 @@ pub fn iterate_blob_log_from_lines<T, L: BufRead>(
         let line_len = line.len();
         let line = if line.ends_with('\n') {
             &line[0..line_len - 1]
-        } else { &line };
+        } else {
+            &line
+        };
 
         let (hash, message, is_merge) = match parse_blob_log_line_or_error(line)? {
             BlobLogLine::StartOfCommit(hash, message) => (hash, message, false),
             BlobLogLine::StartOfMergeCommit(hash, message) => (hash, message, true),
             BlobLogLine::Blob(sm, dm, ssha, dsha, status, pathstr) => {
-                create_blob_and_insert(&mut last_blobs,
-                    sm, dm, ssha, dsha, status, pathstr)?;
+                create_blob_and_insert(&mut last_blobs, sm, dm, ssha, dsha, status, pathstr)?;
                 buf.clear();
                 continue;
             }
@@ -561,7 +559,7 @@ pub fn iterate_blob_log_from_lines<T, L: BufRead>(
         // at this point we know the current line is the start of
         // a commit, or the continuation of a previous merge commit.
         // check if this is the start of a new regular commit:
-        if ! is_merge {
+        if !is_merge {
             // if we need to add the last parsed commit:
             if add_last_commit {
                 let commit_with_blobs = CommitWithBlobs {
@@ -594,14 +592,13 @@ pub fn iterate_blob_log_from_lines<T, L: BufRead>(
                 last_commit = Commit::new(hash, message.to_string(), is_merge);
             }
             // check if this is the very first commit, and also a merge commit:
-            if ! add_last_commit {
+            if !add_last_commit {
                 last_commit = Commit::new(hash, message.to_string(), is_merge);
             }
             // otherwise its a continuation of the last merge commit,
             // so no need to do anything
             add_last_commit = true;
         }
-
 
         buf.clear();
     }
@@ -620,24 +617,36 @@ pub fn iterate_blob_log_from_lines<T, L: BufRead>(
     Ok(false)
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
     use io::Cursor;
 
-
     #[test]
     fn blob_log_line_parse_works() {
         let line = ":000000 100644 0000000 72943a1 A\tmy lib/aaa.txt";
         let parsed = parse_blob_log_line(line).unwrap();
-        let expected = BlobLogLine::Blob("000000", "100644", "0000000", "72943a1", "A", "my lib/aaa.txt");
+        let expected = BlobLogLine::Blob(
+            "000000",
+            "100644",
+            "0000000",
+            "72943a1",
+            "A",
+            "my lib/aaa.txt",
+        );
         assert_eq!(parsed, expected);
 
         // test that rename src->dest still contains both parts:
         let line = ":000000 100644 0000000 72943a1 R100\ta.txt\tb.txt";
         let parsed = parse_blob_log_line(line).unwrap();
-        let expected = BlobLogLine::Blob("000000", "100644", "0000000", "72943a1", "R100", "a.txt\tb.txt");
+        let expected = BlobLogLine::Blob(
+            "000000",
+            "100644",
+            "0000000",
+            "72943a1",
+            "R100",
+            "a.txt\tb.txt",
+        );
         assert_eq!(parsed, expected);
 
         // can detect merge commit lines:
@@ -656,7 +665,8 @@ mod test {
 
     #[test]
     fn blob_and_commit_parse_works1() {
-        let log_output = "hash1 msg1\n:100644 100644 xyz abc M file1.txt\n:100644 00000 123 000 D file2.txt";
+        let log_output =
+            "hash1 msg1\n:100644 100644 xyz abc M file1.txt\n:100644 00000 123 000 D file2.txt";
         let mut cursor = Cursor::new(log_output.as_bytes());
         let mut num_commits_visited = 0;
         let _ = iterate_blob_log_from_lines(&mut cursor, |c| {
@@ -666,7 +676,8 @@ mod test {
             assert_eq!(c.blobs[0].status(), DiffStatus::Modified);
             assert_eq!(c.blobs[1].status(), DiffStatus::Deleted);
             false
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(num_commits_visited, 1);
     }
 
@@ -688,7 +699,8 @@ mod test {
             assert_eq!(c.blobs.len(), 3);
             assert_eq!(c.blobs[0].status(), DiffStatus::Added);
             false
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(num_commits_visited, 1);
     }
 
@@ -715,16 +727,18 @@ mod test {
         let parsed = match parsed {
             BlobLogLine::StartOfMergeCommit(_, _) => panic!(),
             BlobLogLine::StartOfCommit(_, _) => panic!(),
-            BlobLogLine::Blob(a, b, c, d, e, f) => create_blob(a, b, c, d, e, f).unwrap()
+            BlobLogLine::Blob(a, b, c, d, e, f) => create_blob(a, b, c, d, e, f).unwrap(),
         };
         println!("{:#?}", parsed);
         assert_eq!(parsed.path_dest, "file5");
         assert_eq!(parsed.path_src, "file5");
         assert_eq!(parsed.dest_sha, 0);
         assert!(parsed.src_sha != 0);
-        let (status, src_mode, dest_mode): (DiffStatus, FileMode, FileMode) = parsed.src_dest_mode_and_status.into();
+        let (status, src_mode, dest_mode): (DiffStatus, FileMode, FileMode) =
+            parsed.src_dest_mode_and_status.into();
         assert!(status == DiffStatus::Deleted);
         assert!(src_mode == FileMode::RegularNonEx);
         assert!(dest_mode == FileMode::Empty);
     }
 }
+
